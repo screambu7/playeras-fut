@@ -1,15 +1,18 @@
 "use client";
 
-import { useState, useMemo, Suspense } from "react";
+import { useState, useMemo, Suspense, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
-import { products, getAllLeagues, getAllTeams } from "@/data/products";
+import { getProducts } from "@/lib/medusa";
+import { adaptMedusaProduct } from "@/types/medusa";
 import ProductGrid from "@/components/ProductGrid";
-import { FilterOption, SortOption, Liga } from "@/types";
+import { FilterOption, SortOption, Liga, Product } from "@/types";
 
 function CatalogoContent() {
   const searchParams = useSearchParams();
   const initialLeague = searchParams.get("liga") as Liga | null;
 
+  const [products, setProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState<FilterOption>({
     league: initialLeague || undefined,
     team: undefined,
@@ -19,8 +22,33 @@ function CatalogoContent() {
   const [sortBy, setSortBy] = useState<SortOption>("popular");
   const [showFilters, setShowFilters] = useState(false);
 
-  const leagues = getAllLeagues();
-  const teams = getAllTeams();
+  useEffect(() => {
+    async function loadProducts() {
+      try {
+        setLoading(true);
+        const medusaProducts = await getProducts();
+        const adaptedProducts = medusaProducts.map(adaptMedusaProduct);
+        setProducts(adaptedProducts);
+      } catch (error) {
+        console.error("Error loading products:", error);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadProducts();
+  }, []);
+
+  const leagues = useMemo(() => {
+    const uniqueLeagues = new Set<Liga>();
+    products.forEach((p) => uniqueLeagues.add(p.league));
+    return Array.from(uniqueLeagues).sort();
+  }, [products]);
+
+  const teams = useMemo(() => {
+    const uniqueTeams = new Set<string>();
+    products.forEach((p) => uniqueTeams.add(p.team));
+    return Array.from(uniqueTeams).sort();
+  }, [products]);
 
   const filteredAndSortedProducts = useMemo(() => {
     let filtered = [...products];
@@ -64,9 +92,12 @@ function CatalogoContent() {
     }
 
     return filtered;
-  }, [filters, sortBy]);
+  }, [products, filters, sortBy]);
 
-  const handleFilterChange = (key: keyof FilterOption, value: string | number | undefined) => {
+  const handleFilterChange = (
+    key: keyof FilterOption,
+    value: string | number | undefined
+  ) => {
     setFilters((prev) => ({
       ...prev,
       [key]: value || undefined,
@@ -84,6 +115,21 @@ function CatalogoContent() {
 
   const hasActiveFilters = Object.values(filters).some((v) => v !== undefined);
 
+  if (loading) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="animate-pulse">
+          <div className="h-10 bg-gray-200 rounded w-1/3 mb-8"></div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            {[...Array(8)].map((_, i) => (
+              <div key={i} className="bg-gray-200 rounded-lg aspect-square"></div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div className="mb-8">
@@ -97,7 +143,9 @@ function CatalogoContent() {
 
       <div className="flex flex-col lg:flex-row gap-8">
         {/* Filters Sidebar */}
-        <aside className={`lg:w-64 ${showFilters ? "block" : "hidden lg:block"}`}>
+        <aside
+          className={`lg:w-64 ${showFilters ? "block" : "hidden lg:block"}`}
+        >
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 sticky top-24">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-lg font-semibold text-gray-900">Filtros</h2>
@@ -119,7 +167,9 @@ function CatalogoContent() {
                 </label>
                 <select
                   value={filters.league || ""}
-                  onChange={(e) => handleFilterChange("league", e.target.value || undefined)}
+                  onChange={(e) =>
+                    handleFilterChange("league", e.target.value || undefined)
+                  }
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                 >
                   <option value="">Todas las ligas</option>
@@ -138,7 +188,9 @@ function CatalogoContent() {
                 </label>
                 <select
                   value={filters.team || ""}
-                  onChange={(e) => handleFilterChange("team", e.target.value || undefined)}
+                  onChange={(e) =>
+                    handleFilterChange("team", e.target.value || undefined)
+                  }
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                 >
                   <option value="">Todos los equipos</option>
@@ -161,7 +213,10 @@ function CatalogoContent() {
                     placeholder="Mínimo"
                     value={filters.minPrice || ""}
                     onChange={(e) =>
-                      handleFilterChange("minPrice", e.target.value ? Number(e.target.value) : undefined)
+                      handleFilterChange(
+                        "minPrice",
+                        e.target.value ? Number(e.target.value) : undefined
+                      )
                     }
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                   />
@@ -170,7 +225,10 @@ function CatalogoContent() {
                     placeholder="Máximo"
                     value={filters.maxPrice || ""}
                     onChange={(e) =>
-                      handleFilterChange("maxPrice", e.target.value ? Number(e.target.value) : undefined)
+                      handleFilterChange(
+                        "maxPrice",
+                        e.target.value ? Number(e.target.value) : undefined
+                      )
                     }
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                   />
@@ -204,7 +262,8 @@ function CatalogoContent() {
                 Filtros
               </button>
               <p className="text-gray-600">
-                {filteredAndSortedProducts.length} producto{filteredAndSortedProducts.length !== 1 ? "s" : ""}
+                {filteredAndSortedProducts.length} producto
+                {filteredAndSortedProducts.length !== 1 ? "s" : ""}
               </p>
             </div>
             <select

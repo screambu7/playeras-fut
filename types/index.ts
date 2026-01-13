@@ -9,13 +9,20 @@ export interface Product {
   team: string;
   league: Liga;
   season: string;
-  price: number;
-  originalPrice?: number;
+  price: number; // precio en EUR
+  originalPrice?: number; // precio original si hay descuento (en EUR)
   images: string[];
   sizes: Talla[];
   description: string;
   featured?: boolean;
   bestSeller?: boolean;
+  variants?: Array<{
+    id: string;
+    size: Talla;
+    price: number;
+    sku: string | null;
+    inventory_quantity?: number;
+  }>;
 }
 
 export interface CartItem {

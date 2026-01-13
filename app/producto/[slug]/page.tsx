@@ -1,10 +1,10 @@
 "use client";
 
 import { notFound } from "next/navigation";
-import { getProductBySlug } from "@/data/products";
-import { useCartStore } from "@/lib/store";
+import { getProductByHandle, addToCart } from "@/lib/medusa";
+import { adaptMedusaProduct } from "@/types/medusa";
 import { useState, useEffect } from "react";
-import { Talla } from "@/types";
+import { Talla, Product } from "@/types";
 import Link from "next/link";
 
 interface ProductPageProps {
@@ -13,17 +13,12 @@ interface ProductPageProps {
 
 export default function ProductPage({ params }: ProductPageProps) {
   const [slug, setSlug] = useState<string>("");
+  const [product, setProduct] = useState<Product | null>(null);
+  const [loading, setLoading] = useState(true);
   const [selectedSize, setSelectedSize] = useState<Talla | null>(null);
+  const [selectedVariantId, setSelectedVariantId] = useState<string | null>(null);
   const [quantity, setQuantity] = useState(1);
-  const [mounted, setMounted] = useState(false);
-
-  const addItem = useCartStore((state) => state.addItem);
-  const init = useCartStore((state) => state.init);
-
-  useEffect(() => {
-    init();
-    setMounted(true);
-  }, [init]);
+  const [addingToCart, setAddingToCart] = useState(false);
 
   useEffect(() => {
     async function getParams() {
@@ -33,7 +28,39 @@ export default function ProductPage({ params }: ProductPageProps) {
     getParams();
   }, [params]);
 
-  if (!mounted || !slug) {
+  useEffect(() => {
+    async function loadProduct() {
+      if (!slug) return;
+
+      try {
+        setLoading(true);
+        const medusaProduct = await getProductByHandle(slug);
+        if (!medusaProduct) {
+          notFound();
+          return;
+        }
+        const adaptedProduct = adaptMedusaProduct(medusaProduct);
+        setProduct(adaptedProduct);
+      } catch (error) {
+        console.error("Error loading product:", error);
+        notFound();
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadProduct();
+  }, [slug]);
+
+  useEffect(() => {
+    if (product && selectedSize) {
+      const variant = product.variants.find((v) => v.size === selectedSize);
+      if (variant) {
+        setSelectedVariantId(variant.id);
+      }
+    }
+  }, [product, selectedSize]);
+
+  if (loading) {
     return (
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="animate-pulse">
@@ -51,19 +78,26 @@ export default function ProductPage({ params }: ProductPageProps) {
     );
   }
 
-  const product = getProductBySlug(slug);
-
   if (!product) {
     notFound();
   }
 
-  const handleAddToCart = () => {
-    if (!selectedSize) {
+  const handleAddToCart = async () => {
+    if (!selectedSize || !selectedVariantId) {
       alert("Por favor selecciona una talla");
       return;
     }
-    addItem(product, selectedSize, quantity);
-    alert("Producto agregado al carrito");
+
+    try {
+      setAddingToCart(true);
+      await addToCart(selectedVariantId, quantity);
+      alert("Producto agregado al carrito");
+    } catch (error) {
+      console.error("Error adding to cart:", error);
+      alert("Error al agregar el producto al carrito");
+    } finally {
+      setAddingToCart(false);
+    }
   };
 
   return (
@@ -80,16 +114,28 @@ export default function ProductPage({ params }: ProductPageProps) {
         {/* Image Gallery */}
         <div>
           <div className="aspect-square bg-gray-100 rounded-lg overflow-hidden mb-4 flex items-center justify-center">
-            <div className="text-9xl">⚽</div>
+            {product.images.length > 0 ? (
+              <img
+                src={product.images[0]}
+                alt={product.name}
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <div className="text-9xl">⚽</div>
+            )}
           </div>
           {product.images.length > 1 && (
             <div className="grid grid-cols-4 gap-2">
-              {product.images.map((_, index) => (
+              {product.images.slice(1).map((image, index) => (
                 <div
                   key={index}
                   className="aspect-square bg-gray-100 rounded overflow-hidden cursor-pointer hover:ring-2 ring-primary-500"
                 >
-                  <div className="w-full h-full flex items-center justify-center text-2xl">⚽</div>
+                  <img
+                    src={image}
+                    alt={`${product.name} ${index + 2}`}
+                    className="w-full h-full object-cover"
+                  />
                 </div>
               ))}
             </div>
@@ -106,7 +152,13 @@ export default function ProductPage({ params }: ProductPageProps) {
             )}
             {product.originalPrice && (
               <span className="inline-block bg-green-500 text-white text-xs font-bold px-3 py-1 rounded ml-2 mb-2">
-                -{Math.round(((product.originalPrice - product.price) / product.originalPrice) * 100)}% OFF
+                -
+                {Math.round(
+                  ((product.originalPrice - product.price) /
+                    product.originalPrice) *
+                    100
+                )}
+                % OFF
               </span>
             )}
           </div>
@@ -140,19 +192,30 @@ export default function ProductPage({ params }: ProductPageProps) {
               Talla
             </label>
             <div className="flex flex-wrap gap-2">
-              {product.sizes.map((size) => (
-                <button
-                  key={size}
-                  onClick={() => setSelectedSize(size)}
-                  className={`px-6 py-3 border-2 rounded-lg font-medium transition-colors ${
-                    selectedSize === size
-                      ? "border-primary-600 bg-primary-50 text-primary-700"
-                      : "border-gray-300 hover:border-gray-400 text-gray-700"
-                  }`}
-                >
-                  {size}
-                </button>
-              ))}
+              {product.sizes.map((size) => {
+                const variant = product.variants.find((v) => v.size === size);
+                const inStock = variant?.inventory_quantity
+                  ? variant.inventory_quantity > 0
+                  : true;
+
+                return (
+                  <button
+                    key={size}
+                    onClick={() => setSelectedSize(size)}
+                    disabled={!inStock}
+                    className={`px-6 py-3 border-2 rounded-lg font-medium transition-colors ${
+                      selectedSize === size
+                        ? "border-primary-600 bg-primary-50 text-primary-700"
+                        : inStock
+                        ? "border-gray-300 hover:border-gray-400 text-gray-700"
+                        : "border-gray-200 bg-gray-100 text-gray-400 cursor-not-allowed"
+                    }`}
+                  >
+                    {size}
+                    {!inStock && " (Agotado)"}
+                  </button>
+                );
+              })}
             </div>
           </div>
 
@@ -167,7 +230,9 @@ export default function ProductPage({ params }: ProductPageProps) {
               >
                 -
               </button>
-              <span className="text-lg font-semibold w-12 text-center">{quantity}</span>
+              <span className="text-lg font-semibold w-12 text-center">
+                {quantity}
+              </span>
               <button
                 onClick={() => setQuantity(quantity + 1)}
                 className="w-10 h-10 border border-gray-300 rounded-lg hover:bg-gray-50 flex items-center justify-center"
@@ -179,13 +244,16 @@ export default function ProductPage({ params }: ProductPageProps) {
 
           <button
             onClick={handleAddToCart}
-            className="w-full bg-primary-600 text-white font-semibold py-4 rounded-lg hover:bg-primary-700 transition-colors mb-4"
+            disabled={addingToCart || !selectedSize}
+            className="w-full bg-primary-600 text-white font-semibold py-4 rounded-lg hover:bg-primary-700 transition-colors mb-4 disabled:bg-gray-400 disabled:cursor-not-allowed"
           >
-            Agregar al Carrito
+            {addingToCart ? "Agregando..." : "Agregar al Carrito"}
           </button>
 
           <div className="border-t border-gray-200 pt-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">Descripción</h3>
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">
+              Descripción
+            </h3>
             <p className="text-gray-600 leading-relaxed">{product.description}</p>
           </div>
         </div>

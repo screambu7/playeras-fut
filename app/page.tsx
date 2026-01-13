@@ -1,9 +1,11 @@
 import Link from "next/link";
-import { getBestSellerProducts } from "@/data/products";
+import { getBestSellerProducts } from "@/lib/medusa";
+import { adaptMedusaProduct } from "@/types/medusa";
 import ProductGrid from "@/components/ProductGrid";
 
-export default function Home() {
-  const bestSellers = getBestSellerProducts();
+export default async function Home() {
+  const medusaProducts = await getBestSellerProducts();
+  const bestSellers = medusaProducts.map(adaptMedusaProduct);
 
   return (
     <div>

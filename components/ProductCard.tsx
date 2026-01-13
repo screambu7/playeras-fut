@@ -13,9 +13,17 @@ export default function ProductCard({ product }: ProductCardProps) {
       className="group block bg-white rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow border border-gray-200"
     >
       <div className="relative aspect-square bg-gray-100 overflow-hidden">
-        <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-gray-100 to-gray-200">
-          <span className="text-6xl">⚽</span>
-        </div>
+        {product.images.length > 0 ? (
+          <img
+            src={product.images[0]}
+            alt={product.name}
+            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+          />
+        ) : (
+          <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-gray-100 to-gray-200">
+            <span className="text-6xl">⚽</span>
+          </div>
+        )}
         {product.bestSeller && (
           <div className="absolute top-2 left-2 bg-red-500 text-white text-xs font-bold px-2 py-1 rounded">
             Más Vendida
