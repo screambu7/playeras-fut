@@ -14,6 +14,15 @@ export default function CarritoPage() {
     loadCart();
   }, []);
 
+  // Recargar carrito cuando se actualiza (para sincronizar con header)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      loadCart();
+    }, 3000); // Polling cada 3 segundos
+
+    return () => clearInterval(interval);
+  }, []);
+
   const loadCart = async () => {
     setLoading(true);
     const cartData = await getCart();
@@ -27,21 +36,33 @@ export default function CarritoPage() {
       return;
     }
 
+    if (!cart) return;
+
     setUpdating(lineItemId);
-    const updatedCart = await updateCartItem(lineItemId, newQuantity);
-    if (updatedCart) {
-      setCart(updatedCart);
+    try {
+      const updatedCart = await updateCartItem(lineItemId, newQuantity);
+      if (updatedCart) {
+        setCart(updatedCart);
+      }
+    } catch (error) {
+      console.error("Error updating quantity:", error);
+    } finally {
+      setUpdating(null);
     }
-    setUpdating(null);
   };
 
   const handleRemoveItem = async (lineItemId: string) => {
     setUpdating(lineItemId);
-    const updatedCart = await removeFromCart(lineItemId);
-    if (updatedCart) {
-      setCart(updatedCart);
+    try {
+      const updatedCart = await removeFromCart(lineItemId);
+      if (updatedCart) {
+        setCart(updatedCart);
+      }
+    } catch (error) {
+      console.error("Error removing item:", error);
+    } finally {
+      setUpdating(null);
     }
-    setUpdating(null);
   };
 
   if (loading) {
@@ -92,8 +113,8 @@ export default function CarritoPage() {
         <div className="lg:col-span-2 space-y-4">
           {cart.items.map((item: MedusaCartItem) => {
             const product = item.variant.product;
-            const price = item.variant.prices?.[0]?.amount || 0;
-            const priceInEuros = price / 100;
+            // El precio viene en unit_price (ya en centavos)
+            const priceInEuros = item.unit_price / 100;
             const itemTotal = priceInEuros * item.quantity;
             const isUpdating = updating === item.id;
 
@@ -157,7 +178,7 @@ export default function CarritoPage() {
 
                     <div className="flex flex-wrap items-center gap-4 mt-4">
                       <div>
-                        <span className="text-sm text-gray-600">Precio: </span>
+                        <span className="text-sm text-gray-600">Precio unitario: </span>
                         <span className="font-medium">€{priceInEuros.toFixed(2)}</span>
                       </div>
                     </div>

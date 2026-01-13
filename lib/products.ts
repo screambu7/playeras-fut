@@ -2,7 +2,7 @@
  * Funciones helper para obtener productos desde Medusa API
  */
 
-import medusaClient from "./medusa";
+import { medusa } from "./medusa";
 import { adaptMedusaProduct, MedusaProductAdapted } from "@/types/medusa";
 import { Liga } from "@/types";
 
@@ -11,7 +11,7 @@ import { Liga } from "@/types";
  */
 export async function getAllProducts(): Promise<MedusaProductAdapted[]> {
   try {
-    const { products } = await medusaClient.products.list();
+    const { products } = await medusa.store.product.list();
     return products.map(adaptMedusaProduct);
   } catch (error) {
     console.error("Error fetching products:", error);
@@ -24,7 +24,7 @@ export async function getAllProducts(): Promise<MedusaProductAdapted[]> {
  */
 export async function getProductByHandle(handle: string): Promise<MedusaProductAdapted | null> {
   try {
-    const { product } = await medusaClient.products.retrieve(handle);
+    const { product } = await medusa.store.product.retrieve(handle);
     return adaptMedusaProduct(product);
   } catch (error) {
     console.error(`Error fetching product ${handle}:`, error);

@@ -2,7 +2,7 @@
  * Funciones para manejar el carrito usando Medusa Cart API
  */
 
-import medusaClient from "./medusa";
+import medusaClient, { medusa } from "./medusa";
 import { MedusaCart, MedusaCartItem } from "@/types/medusa";
 
 let cartId: string | null = null;
@@ -15,7 +15,7 @@ export async function getOrCreateCart(): Promise<MedusaCart | null> {
     // Si ya tenemos un cartId, intentar recuperarlo
     if (cartId) {
       try {
-        const { cart } = await medusaClient.carts.retrieve(cartId);
+        const { cart } = await medusa.store.cart.retrieve(cartId);
         return cart;
       } catch (error) {
         // Si el carrito no existe, crear uno nuevo
@@ -24,7 +24,7 @@ export async function getOrCreateCart(): Promise<MedusaCart | null> {
     }
     
     // Crear un nuevo carrito
-    const { cart } = await medusaClient.carts.create({});
+    const { cart } = await medusa.store.cart.create({});
     cartId = cart.id;
     
     // Guardar cartId en localStorage
@@ -62,7 +62,7 @@ export async function getCart(): Promise<MedusaCart | null> {
   }
   
   try {
-    const { cart } = await medusaClient.carts.retrieve(cartId);
+    const { cart } = await medusa.store.cart.retrieve(cartId);
     return cart;
   } catch (error) {
     console.error("Error retrieving cart:", error);
@@ -85,7 +85,7 @@ export async function addToCart(
   }
   
   try {
-    const { cart: updatedCart } = await medusaClient.carts.lineItems.create(cart.id, {
+    const { cart: updatedCart } = await medusa.store.cart.lineItems.create(cart.id, {
       variant_id: variantId,
       quantity,
     });
@@ -111,7 +111,7 @@ export async function updateCartItem(
   }
   
   try {
-    const { cart: updatedCart } = await medusaClient.carts.lineItems.update(cart.id, lineItemId, {
+    const { cart: updatedCart } = await medusa.store.cart.lineItems.update(cart.id, lineItemId, {
       quantity,
     });
     
@@ -133,7 +133,7 @@ export async function removeFromCart(lineItemId: string): Promise<MedusaCart | n
   }
   
   try {
-    const { cart: updatedCart } = await medusaClient.carts.lineItems.delete(cart.id, lineItemId);
+    const { cart: updatedCart } = await medusa.store.cart.lineItems.delete(cart.id, lineItemId);
     return updatedCart;
   } catch (error) {
     console.error("Error removing from cart:", error);

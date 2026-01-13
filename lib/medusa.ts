@@ -1,10 +1,16 @@
 import Medusa from "@medusajs/js-sdk";
 
 // Cliente Medusa para el frontend
-export const medusa = new Medusa({
+const medusa = new Medusa({
   baseUrl: process.env.NEXT_PUBLIC_MEDUSA_BACKEND_URL || "http://localhost:9000",
   debug: process.env.NODE_ENV === "development",
 });
+
+// Exportar como default para compatibilidad con imports existentes
+export default medusa;
+
+// También exportar como named export
+export { medusa };
 
 // Tipos para productos de Medusa
 export interface MedusaProduct {

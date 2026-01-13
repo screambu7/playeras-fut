@@ -1,16 +1,42 @@
 "use client";
 
 import Link from "next/link";
-import { useCartStore } from "@/lib/store";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { getCart, getCartItemCount } from "@/lib/cart-medusa";
 
 export default function Header() {
-  const itemCount = useCartStore((state) => state.getItemCount());
-  const init = useCartStore((state) => state.init);
+  const [itemCount, setItemCount] = useState(0);
 
   useEffect(() => {
-    init();
-  }, [init]);
+    async function loadCartCount() {
+      try {
+        const cart = await getCart();
+        if (cart) {
+          const count = getCartItemCount(cart);
+          setItemCount(count);
+        }
+      } catch (error) {
+        console.error("Error loading cart count:", error);
+      }
+    }
+
+    loadCartCount();
+
+    // Escuchar eventos de actualización del carrito
+    const handleCartUpdate = () => {
+      loadCartCount();
+    };
+
+    window.addEventListener("cart-updated", handleCartUpdate);
+
+    // Recargar el conteo periódicamente (fallback)
+    const interval = setInterval(loadCartCount, 5000);
+
+    return () => {
+      window.removeEventListener("cart-updated", handleCartUpdate);
+      clearInterval(interval);
+    };
+  }, []);
 
   return (
     <header className="sticky top-0 z-50 bg-white border-b border-gray-200 shadow-sm">
