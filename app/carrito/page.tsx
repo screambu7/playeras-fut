@@ -1,24 +1,50 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useCartStore } from "@/lib/store";
+import { getCart, updateCartItem, removeFromCart, calculateCartTotal } from "@/lib/cart-medusa";
+import { MedusaCart, MedusaCartItem } from "@/types";
 import Link from "next/link";
-import { Talla } from "@/types";
 
 export default function CarritoPage() {
-  const items = useCartStore((state) => state.items);
-  const removeItem = useCartStore((state) => state.removeItem);
-  const updateQuantity = useCartStore((state) => state.updateQuantity);
-  const getTotal = useCartStore((state) => state.getTotal);
-  const init = useCartStore((state) => state.init);
-  const [mounted, setMounted] = useState(false);
+  const [cart, setCart] = useState<MedusaCart | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [updating, setUpdating] = useState<string | null>(null);
 
   useEffect(() => {
-    init();
-    setMounted(true);
-  }, [init]);
+    loadCart();
+  }, []);
 
-  if (!mounted) {
+  const loadCart = async () => {
+    setLoading(true);
+    const cartData = await getCart();
+    setCart(cartData);
+    setLoading(false);
+  };
+
+  const handleUpdateQuantity = async (lineItemId: string, newQuantity: number) => {
+    if (newQuantity < 1) {
+      handleRemoveItem(lineItemId);
+      return;
+    }
+
+    setUpdating(lineItemId);
+    const updatedCart = await updateCartItem(lineItemId, newQuantity);
+    if (updatedCart) {
+      setCart(updatedCart);
+    }
+    setUpdating(null);
+  };
+
+  const handleRemoveItem = async (lineItemId: string) => {
+    setUpdating(lineItemId);
+    const updatedCart = await removeFromCart(lineItemId);
+    if (updatedCart) {
+      setCart(updatedCart);
+    }
+    setUpdating(null);
+  };
+
+  if (loading) {
     return (
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="animate-pulse">
@@ -33,9 +59,7 @@ export default function CarritoPage() {
     );
   }
 
-  const total = getTotal();
-
-  if (items.length === 0) {
+  if (!cart || !cart.items || cart.items.length === 0) {
     return (
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
         <div className="text-center">
@@ -55,6 +79,8 @@ export default function CarritoPage() {
     );
   }
 
+  const total = calculateCartTotal(cart) / 100; // Convertir de centavos a euros
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <h1 className="text-3xl md:text-4xl font-bold text-gray-900 mb-8">
@@ -64,93 +90,109 @@ export default function CarritoPage() {
       <div className="grid lg:grid-cols-3 gap-8">
         {/* Cart Items */}
         <div className="lg:col-span-2 space-y-4">
-          {items.map((item, index) => (
-            <div
-              key={`${item.product.id}-${item.size}-${index}`}
-              className="bg-white rounded-lg border border-gray-200 p-4 sm:p-6"
-            >
-              <div className="flex flex-col sm:flex-row gap-4">
-                {/* Product Image */}
-                <div className="w-full sm:w-24 h-24 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                  <span className="text-4xl">⚽</span>
-                </div>
+          {cart.items.map((item: MedusaCartItem) => {
+            const product = item.variant.product;
+            const price = item.variant.prices?.[0]?.amount || 0;
+            const priceInEuros = price / 100;
+            const itemTotal = priceInEuros * item.quantity;
+            const isUpdating = updating === item.id;
 
-                {/* Product Info */}
-                <div className="flex-1">
-                  <div className="flex justify-between items-start mb-2">
-                    <div>
-                      <Link
-                        href={`/producto/${item.product.slug}`}
-                        className="text-lg font-semibold text-gray-900 hover:text-primary-600 transition-colors"
-                      >
-                        {item.product.name}
-                      </Link>
-                      <p className="text-sm text-gray-600">{item.product.team}</p>
-                    </div>
-                    <button
-                      onClick={() => removeItem(item.product.id, item.size)}
-                      className="text-gray-400 hover:text-red-500 transition-colors"
-                      aria-label="Eliminar producto"
-                    >
-                      <svg
-                        className="w-5 h-5"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M6 18L18 6M6 6l12 12"
-                        />
-                      </svg>
-                    </button>
+            return (
+              <div
+                key={item.id}
+                className="bg-white rounded-lg border border-gray-200 p-4 sm:p-6"
+              >
+                <div className="flex flex-col sm:flex-row gap-4">
+                  {/* Product Image */}
+                  <div className="w-full sm:w-24 h-24 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                    {product.images && product.images.length > 0 ? (
+                      <img
+                        src={product.images[0].url}
+                        alt={product.title}
+                        className="w-full h-full object-cover rounded-lg"
+                      />
+                    ) : (
+                      <span className="text-4xl">⚽</span>
+                    )}
                   </div>
 
-                  <div className="flex flex-wrap items-center gap-4 mt-4">
-                    <div>
-                      <span className="text-sm text-gray-600">Talla: </span>
-                      <span className="font-medium">{item.size}</span>
+                  {/* Product Info */}
+                  <div className="flex-1">
+                    <div className="flex justify-between items-start mb-2">
+                      <div>
+                        <Link
+                          href={`/producto/${product.handle}`}
+                          className="text-lg font-semibold text-gray-900 hover:text-primary-600 transition-colors"
+                        >
+                          {product.title}
+                        </Link>
+                        <p className="text-sm text-gray-600">
+                          {product.metadata?.team || ""}
+                        </p>
+                        <p className="text-sm text-gray-500 mt-1">
+                          Talla: {item.variant.title}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => handleRemoveItem(item.id)}
+                        disabled={isUpdating}
+                        className="text-gray-400 hover:text-red-500 transition-colors disabled:opacity-50"
+                        aria-label="Eliminar producto"
+                      >
+                        <svg
+                          className="w-5 h-5"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M6 18L18 6M6 6l12 12"
+                          />
+                        </svg>
+                      </button>
                     </div>
-                    <div>
-                      <span className="text-sm text-gray-600">Precio: </span>
-                      <span className="font-medium">€{item.product.price.toFixed(2)}</span>
-                    </div>
-                  </div>
 
-                  {/* Quantity Controls */}
-                  <div className="flex items-center space-x-4 mt-4">
-                    <label className="text-sm text-gray-600">Cantidad:</label>
-                    <div className="flex items-center space-x-2">
-                      <button
-                        onClick={() =>
-                          updateQuantity(item.product.id, item.size, item.quantity - 1)
-                        }
-                        className="w-8 h-8 border border-gray-300 rounded hover:bg-gray-50 flex items-center justify-center"
-                      >
-                        -
-                      </button>
-                      <span className="w-12 text-center font-medium">{item.quantity}</span>
-                      <button
-                        onClick={() =>
-                          updateQuantity(item.product.id, item.size, item.quantity + 1)
-                        }
-                        className="w-8 h-8 border border-gray-300 rounded hover:bg-gray-50 flex items-center justify-center"
-                      >
-                        +
-                      </button>
+                    <div className="flex flex-wrap items-center gap-4 mt-4">
+                      <div>
+                        <span className="text-sm text-gray-600">Precio: </span>
+                        <span className="font-medium">€{priceInEuros.toFixed(2)}</span>
+                      </div>
                     </div>
-                    <div className="ml-auto">
-                      <span className="text-lg font-bold text-gray-900">
-                        €{(item.product.price * item.quantity).toFixed(2)}
-                      </span>
+
+                    {/* Quantity Controls */}
+                    <div className="flex items-center space-x-4 mt-4">
+                      <label className="text-sm text-gray-600">Cantidad:</label>
+                      <div className="flex items-center space-x-2">
+                        <button
+                          onClick={() => handleUpdateQuantity(item.id, item.quantity - 1)}
+                          disabled={isUpdating}
+                          className="w-8 h-8 border border-gray-300 rounded hover:bg-gray-50 flex items-center justify-center disabled:opacity-50"
+                        >
+                          -
+                        </button>
+                        <span className="w-12 text-center font-medium">{item.quantity}</span>
+                        <button
+                          onClick={() => handleUpdateQuantity(item.id, item.quantity + 1)}
+                          disabled={isUpdating}
+                          className="w-8 h-8 border border-gray-300 rounded hover:bg-gray-50 flex items-center justify-center disabled:opacity-50"
+                        >
+                          +
+                        </button>
+                      </div>
+                      <div className="ml-auto">
+                        <span className="text-lg font-bold text-gray-900">
+                          €{itemTotal.toFixed(2)}
+                        </span>
+                      </div>
                     </div>
                   </div>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
         {/* Order Summary */}

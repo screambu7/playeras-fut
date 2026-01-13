@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useMemo, Suspense } from "react";
+import { useState, useMemo, Suspense, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
-import { products, getAllLeagues, getAllTeams } from "@/data/products";
+import { filterProducts, getAllLeagues, getAllTeams } from "@/lib/products";
 import ProductGrid from "@/components/ProductGrid";
-import { FilterOption, SortOption, Liga } from "@/types";
+import { FilterOption, SortOption, Liga, MedusaProductAdapted } from "@/types";
 
 function CatalogoContent() {
   const searchParams = useSearchParams();
@@ -18,26 +18,36 @@ function CatalogoContent() {
   });
   const [sortBy, setSortBy] = useState<SortOption>("popular");
   const [showFilters, setShowFilters] = useState(false);
+  const [products, setProducts] = useState<MedusaProductAdapted[]>([]);
+  const [leagues, setLeagues] = useState<Liga[]>([]);
+  const [teams, setTeams] = useState<string[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const leagues = getAllLeagues();
-  const teams = getAllTeams();
+  useEffect(() => {
+    async function loadData() {
+      setLoading(true);
+      try {
+        const [filteredProducts, allLeagues, allTeams] = await Promise.all([
+          filterProducts(filters),
+          getAllLeagues(),
+          getAllTeams(),
+        ]);
+        
+        setProducts(filteredProducts);
+        setLeagues(allLeagues);
+        setTeams(allTeams);
+      } catch (error) {
+        console.error("Error loading products:", error);
+      } finally {
+        setLoading(false);
+      }
+    }
+    
+    loadData();
+  }, [filters]);
 
   const filteredAndSortedProducts = useMemo(() => {
     let filtered = [...products];
-
-    // Apply filters
-    if (filters.league) {
-      filtered = filtered.filter((p) => p.league === filters.league);
-    }
-    if (filters.team) {
-      filtered = filtered.filter((p) => p.team === filters.team);
-    }
-    if (filters.minPrice !== undefined) {
-      filtered = filtered.filter((p) => p.price >= filters.minPrice!);
-    }
-    if (filters.maxPrice !== undefined) {
-      filtered = filtered.filter((p) => p.price <= filters.maxPrice!);
-    }
 
     // Apply sorting
     switch (sortBy) {
@@ -48,23 +58,23 @@ function CatalogoContent() {
         filtered.sort((a, b) => b.price - a.price);
         break;
       case "name-asc":
-        filtered.sort((a, b) => a.name.localeCompare(b.name));
+        filtered.sort((a, b) => a.title.localeCompare(b.title));
         break;
       case "name-desc":
-        filtered.sort((a, b) => b.name.localeCompare(a.name));
+        filtered.sort((a, b) => b.title.localeCompare(a.title));
         break;
       case "popular":
       default:
         filtered.sort((a, b) => {
-          if (a.bestSeller && !b.bestSeller) return -1;
-          if (!a.bestSeller && b.bestSeller) return 1;
+          if (a.metadata.bestSeller && !b.metadata.bestSeller) return -1;
+          if (!a.metadata.bestSeller && b.metadata.bestSeller) return 1;
           return 0;
         });
         break;
     }
 
     return filtered;
-  }, [filters, sortBy]);
+  }, [products, sortBy]);
 
   const handleFilterChange = (key: keyof FilterOption, value: string | number | undefined) => {
     setFilters((prev) => ({
@@ -83,6 +93,21 @@ function CatalogoContent() {
   };
 
   const hasActiveFilters = Object.values(filters).some((v) => v !== undefined);
+
+  if (loading) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="animate-pulse">
+          <div className="h-8 bg-gray-200 rounded w-1/3 mb-8"></div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            {[...Array(8)].map((_, i) => (
+              <div key={i} className="bg-gray-200 rounded-lg aspect-square"></div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -229,7 +254,13 @@ function CatalogoContent() {
 
 export default function CatalogoPage() {
   return (
-    <Suspense fallback={<div>Cargando...</div>}>
+    <Suspense fallback={
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="animate-pulse">
+          <div className="h-8 bg-gray-200 rounded w-1/3 mb-8"></div>
+        </div>
+      </div>
+    }>
       <CatalogoContent />
     </Suspense>
   );

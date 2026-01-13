@@ -1,9 +1,9 @@
 import Link from "next/link";
-import { getBestSellerProducts } from "@/data/products";
+import { getBestSellerProducts } from "@/lib/products";
 import ProductGrid from "@/components/ProductGrid";
 
-export default function Home() {
-  const bestSellers = getBestSellerProducts();
+export default async function Home() {
+  const bestSellers = await getBestSellerProducts();
 
   return (
     <div>

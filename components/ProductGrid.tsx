@@ -1,8 +1,8 @@
-import { Product } from "@/types";
+import { MedusaProductAdapted } from "@/types";
 import ProductCard from "./ProductCard";
 
 interface ProductGridProps {
-  products: Product[];
+  products: MedusaProductAdapted[];
 }
 
 export default function ProductGrid({ products }: ProductGridProps) {

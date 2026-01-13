@@ -1,138 +1,218 @@
-# Playeras Fut - Tienda Online de Playeras de Fútbol
+# Playeras Fut - E-commerce Headless
 
-Tienda online especializada en playeras de fútbol oficiales. Proyecto desarrollado con Next.js 14 (App Router), TypeScript y Tailwind CSS.
+E-commerce profesional de playeras de fútbol usando arquitectura HEADLESS con Next.js + Medusa.js.
 
-## 🚀 Fase 1 - Base del Proyecto
-
-Esta fase incluye:
-- ✅ Frontend completo con Next.js App Router
-- ✅ Catálogo de productos con filtros y ordenamiento
-- ✅ Páginas de producto individuales
-- ✅ Carrito de compras funcional con persistencia en localStorage
-- ✅ Diseño responsive mobile-first
-- ✅ Arquitectura escalable preparada para integración de pagos
-
-## 📋 Stack Tecnológico
-
-- **Framework**: Next.js 14 (App Router)
-- **Lenguaje**: TypeScript
-- **Estilos**: Tailwind CSS
-- **Estado**: Zustand
-- **Tipografía**: Inter (Google Fonts)
-
-## 🏗️ Estructura del Proyecto
+## 🏗️ Arquitectura
 
 ```
-/
-├── app/                    # Páginas y rutas (App Router)
-│   ├── page.tsx           # Home
-│   ├── catalogo/          # Catálogo de productos
-│   ├── producto/[slug]/   # Página de producto individual
-│   └── carrito/           # Carrito de compras
-├── components/             # Componentes reutilizables
-│   ├── Header.tsx
-│   ├── Footer.tsx
-│   ├── ProductCard.tsx
-│   └── ProductGrid.tsx
-├── data/                  # Mock data
-│   └── products.ts
-├── lib/                   # Lógica de negocio
-│   ├── cart.ts           # Funciones del carrito
-│   └── store.ts          # Store de Zustand
-├── types/                 # Tipos TypeScript
-│   └── index.ts
-└── styles/                # Estilos globales
-    └── globals.css
+playeras-fut/
+├── backend/          # Medusa.js Backend
+│   ├── src/
+│   ├── medusa-config.ts
+│   └── package.json
+├── app/              # Next.js Frontend (App Router)
+│   ├── page.tsx
+│   ├── catalogo/
+│   ├── producto/
+│   └── carrito/
+├── components/       # Componentes React
+├── lib/              # Utilidades y clientes API
+└── types/            # Tipos TypeScript
 ```
 
-## 🛠️ Instalación
+## 🚀 Setup Inicial
 
-1. Instalar dependencias:
+> 📖 **Para una guía detallada paso a paso, consulta [SETUP.md](./SETUP.md)**
+
+### Prerrequisitos
+
+- Node.js 18+
+- PostgreSQL 14+
+- npm o yarn
+
+### Quick Start
+
+1. **Configurar Base de Datos PostgreSQL** (ver SETUP.md)
+2. **Configurar Backend**: `cd backend && npm install && npm run migrate`
+3. **Configurar Frontend**: `npm install`
+4. **Iniciar Backend**: `cd backend && npm run dev`
+5. **Iniciar Frontend**: `npm run dev`
+
+### 1. Configurar Backend (Medusa.js)
+
 ```bash
+cd backend
 npm install
 ```
 
-2. Ejecutar en modo desarrollo:
+#### Configurar Base de Datos
+
+1. Crear base de datos PostgreSQL:
+```sql
+CREATE DATABASE medusa_store;
+CREATE USER medusa_user WITH PASSWORD 'tu_password';
+GRANT ALL PRIVILEGES ON DATABASE medusa_store TO medusa_user;
+```
+
+2. Crear archivo `.env` en `backend/`:
+```env
+DATABASE_URL=postgres://medusa_user:tu_password@localhost:5432/medusa_store
+STORE_CORS=http://localhost:3000
+ADMIN_CORS=http://localhost:7001
+JWT_SECRET=tu_jwt_secret
+COOKIE_SECRET=tu_cookie_secret
+PORT=9000
+NODE_ENV=development
+```
+
+3. Ejecutar migraciones:
+```bash
+npm run migrate
+```
+
+4. Seed de productos (opcional):
+```bash
+npm run seed
+```
+
+5. Iniciar servidor:
 ```bash
 npm run dev
 ```
 
-3. Abrir en el navegador:
+El backend estará disponible en `http://localhost:9000`
+
+### 2. Configurar Frontend (Next.js)
+
+```bash
+# En la raíz del proyecto
+npm install
 ```
-http://localhost:3000
+
+#### Configurar Variables de Entorno
+
+Crear archivo `.env.local`:
+```env
+NEXT_PUBLIC_MEDUSA_BACKEND_URL=http://localhost:9000
 ```
 
-## 📦 Scripts Disponibles
+#### Iniciar Servidor de Desarrollo
 
-- `npm run dev` - Inicia el servidor de desarrollo
-- `npm run build` - Construye la aplicación para producción
-- `npm run start` - Inicia el servidor de producción
-- `npm run lint` - Ejecuta el linter
+```bash
+npm run dev
+```
 
-## 🎯 Funcionalidades Implementadas
+El frontend estará disponible en `http://localhost:3000`
 
-### Home
-- Hero section con call-to-action
-- Sección de productos más vendidos
-- Sección de características/beneficios
+## 📦 Estructura del Proyecto
 
-### Catálogo
-- Listado de todos los productos
-- Filtros por:
-  - Liga
-  - Equipo
-  - Rango de precio
-- Ordenamiento:
-  - Más populares
-  - Precio (ascendente/descendente)
-  - Nombre (A-Z / Z-A)
-- Diseño responsive con grid adaptativo
+### Backend (Medusa.js)
 
-### Página de Producto
-- Información detallada del producto
-- Selección de talla
-- Selector de cantidad
-- Botón para agregar al carrito
-- Breadcrumbs de navegación
+- **`src/index.ts`**: Punto de entrada del servidor
+- **`medusa-config.ts`**: Configuración de Medusa
+- **`src/scripts/seed.ts`**: Script para crear productos de ejemplo
 
-### Carrito
-- Visualización de productos agregados
-- Modificar cantidad
-- Eliminar productos
-- Cálculo de subtotal
-- Persistencia en localStorage
-- Resumen del pedido
+### Frontend (Next.js)
+
+- **`app/page.tsx`**: Página principal (Home)
+- **`app/catalogo/page.tsx`**: Catálogo de productos
+- **`app/producto/[slug]/page.tsx`**: Página de detalle de producto
+- **`app/carrito/page.tsx`**: Carrito de compras
+- **`lib/medusa.ts`**: Cliente Medusa
+- **`lib/products.ts`**: Funciones helper para productos
+- **`lib/cart-medusa.ts`**: Funciones para manejo del carrito
+
+## 🎯 Funcionalidades Implementadas (Fase 1A)
+
+✅ Estructura base del proyecto
+✅ Backend Medusa.js configurado
+✅ Frontend Next.js con App Router
+✅ Conexión frontend ↔ backend
+✅ Catálogo de productos
+✅ Página de detalle de producto
+✅ Carrito básico (sin checkout)
+✅ Filtros y ordenamiento
+✅ Responsive design
 
 ## 🔄 Próximas Fases
 
-### Fase 2 (Pendiente)
-- Integración de pasarela de pagos
+### Fase 2: Checkout y Pagos
 - Proceso de checkout completo
+- Integración de pasarelas de pago
 - Gestión de órdenes
 
-### Fase 3 (Pendiente)
-- Backend API real
-- Base de datos
-- Panel de administración
-- Autenticación de usuarios
+### Fase 3: Inventario Avanzado
+- Gestión de stock
+- Variantes de productos
+- Categorías y tags
 
-## 🏛️ Arquitectura
+### Fase 4: Admin Avanzado
+- Panel de administración personalizado
+- Reportes y analytics
+- Gestión de usuarios
 
-El proyecto sigue principios de arquitectura limpia:
+## 🛠️ Scripts Disponibles
 
-- **Separación de Responsabilidades**: Cada módulo tiene una responsabilidad clara
-- **Componentes Reutilizables**: Componentes UI independientes y reutilizables
-- **Lógica de Negocio Separada**: Funciones de negocio en `/lib`
-- **Tipado Fuerte**: TypeScript en todo el proyecto
-- **Escalabilidad**: Estructura preparada para crecer
+### Backend
+- `npm run dev`: Inicia servidor en modo desarrollo
+- `npm run build`: Compila el proyecto
+- `npm run start`: Inicia servidor en producción
+- `npm run migrate`: Ejecuta migraciones de base de datos
+- `npm run seed`: Crea productos de ejemplo
 
-## 📝 Notas
+### Frontend
+- `npm run dev`: Inicia servidor de desarrollo
+- `npm run build`: Compila para producción
+- `npm run start`: Inicia servidor de producción
+- `npm run lint`: Ejecuta el linter
 
-- Las imágenes de productos son placeholders (emojis). En producción se reemplazarán con imágenes reales.
-- El carrito persiste en `localStorage` del navegador.
-- Los datos de productos están en mock data (`/data/products.ts`).
-- El botón "Continuar Compra" está deshabilitado hasta la Fase 2.
+## 📝 Notas de Desarrollo
 
-## 📄 Licencia
+- El carrito usa la API de Medusa Cart
+- Los productos se obtienen desde la API de Medusa
+- El frontend está completamente tipado con TypeScript
+- Se usa Tailwind CSS para estilos
+- Mobile-first approach
 
-Este proyecto es privado y de uso interno.
+## 🔀 Git Workflow
+
+Este proyecto usa **GitHub Flow** para desarrollo colaborativo.
+
+- 📖 **Guía completa**: [GIT_WORKFLOW.md](./GIT_WORKFLOW.md)
+- ⚡ **Quick Start**: [QUICK_START_GIT.md](./QUICK_START_GIT.md)
+- 🤝 **Contribuir**: [CONTRIBUTING.md](./CONTRIBUTING.md)
+
+### Branches Principales
+
+- `main`: Producción (solo merge desde `develop` o `hotfix/*`)
+- `develop`: Desarrollo activo (integración de features)
+
+### Flujo Rápido
+
+```bash
+# 1. Actualizar develop
+git checkout develop && git pull origin develop
+
+# 2. Crear feature branch
+git checkout -b feature/mi-feature
+
+# 3. Trabajar y commitear
+git add . && git commit -m "feat: mi cambio"
+
+# 4. Push y crear PR
+git push origin feature/mi-feature
+# Crear PR en GitHub: feature/mi-feature → develop
+```
+
+## 🔒 Seguridad
+
+- Nunca versionar archivos `.env`
+- Usar variables de entorno para secrets
+- Validar datos en backend
+- CORS configurado correctamente
+
+## 📚 Documentación
+
+- [Medusa.js Docs](https://docs.medusajs.com)
+- [Next.js Docs](https://nextjs.org/docs)
+- [TypeScript Docs](https://www.typescriptlang.org/docs)

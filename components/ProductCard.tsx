@@ -1,22 +1,22 @@
 import Link from "next/link";
 import Image from "next/image";
-import { Product } from "@/types";
+import { MedusaProductAdapted } from "@/types";
 
 interface ProductCardProps {
-  product: Product;
+  product: MedusaProductAdapted;
 }
 
 export default function ProductCard({ product }: ProductCardProps) {
   return (
-    <Link
-      href={`/producto/${product.slug}`}
+      <Link
+      href={`/producto/${product.handle}`}
       className="group block bg-white rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow border border-gray-200"
     >
       <div className="relative aspect-square bg-gray-100 overflow-hidden">
         <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-gray-100 to-gray-200">
           <span className="text-6xl">⚽</span>
         </div>
-        {product.bestSeller && (
+        {product.metadata.bestSeller && (
           <div className="absolute top-2 left-2 bg-red-500 text-white text-xs font-bold px-2 py-1 rounded">
             Más Vendida
           </div>
@@ -31,9 +31,9 @@ export default function ProductCard({ product }: ProductCardProps) {
       <div className="p-4">
         <div className="mb-2">
           <h3 className="font-semibold text-gray-900 group-hover:text-primary-600 transition-colors line-clamp-2">
-            {product.name}
+            {product.title}
           </h3>
-          <p className="text-sm text-gray-600 mt-1">{product.team}</p>
+          <p className="text-sm text-gray-600 mt-1">{product.metadata.team || ""}</p>
         </div>
         
         <div className="flex items-center justify-between mt-3">
@@ -47,9 +47,11 @@ export default function ProductCard({ product }: ProductCardProps) {
               €{product.price.toFixed(2)}
             </span>
           </div>
-          <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
-            {product.league}
-          </span>
+          {product.metadata.league && (
+            <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
+              {product.metadata.league}
+            </span>
+          )}
         </div>
       </div>
     </Link>

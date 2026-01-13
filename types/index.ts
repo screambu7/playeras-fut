@@ -2,6 +2,9 @@ export type Liga = "La Liga" | "Premier League" | "Serie A" | "Bundesliga" | "Li
 
 export type Talla = "XS" | "S" | "M" | "L" | "XL" | "XXL";
 
+// Re-exportar tipos de Medusa
+export type { MedusaProductAdapted, MedusaProductVariant, MedusaCart, MedusaCartItem } from "./medusa";
+
 export interface Product {
   id: string;
   slug: string;
