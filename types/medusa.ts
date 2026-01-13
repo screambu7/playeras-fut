@@ -1,80 +1,92 @@
-/**
- * Tipos compatibles con Medusa.js API
- */
-
-import { Product as MedusaProduct, ProductVariant, StoreCartsRes } from "@medusajs/medusa-js";
+import { MedusaProduct } from "@/lib/medusa";
 import { Liga, Talla } from "./index";
 
 /**
- * Producto de Medusa adaptado a nuestro dominio
+ * Producto adaptado desde Medusa para uso en el frontend
  */
-export interface MedusaProductAdapted {
+export interface Product {
   id: string;
-  handle: string;
-  title: string;
-  description: string;
-  price: number;
-  originalPrice?: number;
+  slug: string; // handle de Medusa
+  name: string; // title de Medusa
+  team: string; // desde metadata
+  league: Liga; // desde metadata
+  season: string; // desde metadata
+  price: number; // precio en EUR
+  originalPrice?: number; // precio original si hay descuento (en EUR)
   images: string[];
-  variants: MedusaProductVariant[];
-  metadata: {
-    team?: string;
-    league?: Liga;
-    season?: string;
-    featured?: boolean;
-    bestSeller?: boolean;
-  };
-}
-
-export interface MedusaProductVariant {
-  id: string;
-  title: string;
-  prices: Array<{
-    amount: number;
-    currency_code: string;
-  }>;
-  inventory_quantity?: number;
-  manage_inventory?: boolean;
-}
-
-/**
- * Helper para convertir Product de Medusa a nuestro formato
- */
-export function adaptMedusaProduct(product: MedusaProduct): MedusaProductAdapted {
-  const images = product.images?.map((img) => img.url) || [];
-  const metadata = (product.metadata || {}) as MedusaProductAdapted["metadata"];
-  
-  // Obtener precio base (primera variante o primer precio)
-  const basePrice = product.variants?.[0]?.prices?.[0]?.amount || 0;
-  
-  return {
-    id: product.id,
-    handle: product.handle,
-    title: product.title,
-    description: product.description || "",
-    price: basePrice / 100, // Convertir de centavos a euros
-    images,
-    variants: product.variants || [],
-    metadata,
-  };
-}
-
-/**
- * Tipos para el carrito de Medusa
- */
-export type MedusaCart = StoreCartsRes["cart"];
-
-export interface MedusaCartItem {
-  id: string;
-  variant_id: string;
-  quantity: number;
-  variant: {
+  sizes: Talla[];
+  description: string;
+  featured?: boolean;
+  bestSeller?: boolean;
+  variants: Array<{
     id: string;
-    title: string;
-    product: MedusaProduct;
-    prices: Array<{
-      amount: number;
-      currency_code: string;
-    }>;
+    size: Talla;
+    price: number;
+    sku: string | null;
+    inventory_quantity?: number;
+  }>;
+}
+
+/**
+ * Convierte un producto de Medusa al formato del frontend
+ */
+export function adaptMedusaProduct(medusaProduct: MedusaProduct): Product {
+  // Obtener metadata
+  const team = medusaProduct.metadata?.team || "";
+  const league = (medusaProduct.metadata?.league || "") as Liga;
+  const season = medusaProduct.metadata?.season || "";
+  const featured = medusaProduct.metadata?.featured === "true";
+  const bestSeller = medusaProduct.metadata?.bestSeller === "true";
+  const originalPriceStr = medusaProduct.metadata?.originalPrice;
+
+  // Obtener opciones de talla
+  const sizeOption = medusaProduct.options.find((opt) => opt.title === "Size");
+  const sizes: Talla[] = sizeOption
+    ? (sizeOption.values.map((v) => v.value) as Talla[])
+    : [];
+
+  // Obtener imágenes
+  const images = medusaProduct.images.map((img) => img.url);
+
+  // Obtener precio base (EUR) - Medusa almacena precios en centavos
+  const eurPriceInCents = medusaProduct.variants[0]?.prices.find(
+    (p) => p.currency_code === "eur"
+  )?.amount || 0;
+  const eurPrice = eurPriceInCents / 100; // Convertir centavos a euros
+
+  const originalPrice = originalPriceStr
+    ? parseInt(originalPriceStr, 10) / 100 // Convertir centavos a euros
+    : undefined;
+
+  // Adaptar variantes
+  const variants = medusaProduct.variants.map((variant) => {
+    const size = variant.options.Size as Talla;
+    const priceInCents = variant.prices.find((p) => p.currency_code === "eur")?.amount || 0;
+    const price = priceInCents / 100; // Convertir centavos a euros
+
+    return {
+      id: variant.id,
+      size,
+      price,
+      sku: variant.sku,
+      inventory_quantity: variant.inventory_quantity,
+    };
+  });
+
+  return {
+    id: medusaProduct.id,
+    slug: medusaProduct.handle,
+    name: medusaProduct.title,
+    team,
+    league,
+    season,
+    price: eurPrice,
+    originalPrice,
+    images,
+    sizes,
+    description: medusaProduct.description || "",
+    featured,
+    bestSeller,
+    variants,
   };
 }
