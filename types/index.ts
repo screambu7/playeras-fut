@@ -40,10 +40,22 @@ export interface Cart {
 }
 
 export type FilterOption = {
-  league?: Liga;
-  team?: string;
+  leagues?: Liga[];
+  teams?: string[];
+  sizes?: Talla[];
   minPrice?: number;
   maxPrice?: number;
+};
+
+/**
+ * Filtros parseados desde searchParams de la URL
+ */
+export type CatalogFilters = {
+  leagues: Set<Liga>;
+  teams: Set<string>;
+  sizes: Set<Talla>;
+  minPrice: number | null;
+  maxPrice: number | null;
 };
 
 export type SortOption = "price-asc" | "price-desc" | "name-asc" | "name-desc" | "popular";

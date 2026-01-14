@@ -4,14 +4,14 @@
 
 import { medusa } from "./medusa";
 import { adaptMedusaProduct, MedusaProductAdapted } from "@/types/medusa";
-import { Liga } from "@/types";
+import { Liga, Talla } from "@/types";
 
 /**
  * Obtener todos los productos
  */
 export async function getAllProducts(): Promise<MedusaProductAdapted[]> {
   try {
-    const { products } = await medusa.store.product.list();
+    const { products } = await medusa.products.list();
     return products.map(adaptMedusaProduct);
   } catch (error) {
     console.error("Error fetching products:", error);
@@ -24,7 +24,7 @@ export async function getAllProducts(): Promise<MedusaProductAdapted[]> {
  */
 export async function getProductByHandle(handle: string): Promise<MedusaProductAdapted | null> {
   try {
-    const { product } = await medusa.store.product.retrieve(handle);
+    const { product } = await medusa.products.retrieve(handle);
     return adaptMedusaProduct(product);
   } catch (error) {
     console.error(`Error fetching product ${handle}:`, error);
@@ -78,6 +78,35 @@ export async function getAllTeams(): Promise<string[]> {
   });
   
   return Array.from(teams).sort();
+}
+
+/**
+ * Obtener todas las tallas disponibles
+ */
+export async function getAllSizes(): Promise<Talla[]> {
+  const products = await getAllProducts();
+  const sizes = new Set<Talla>();
+  
+  products.forEach((product) => {
+    product.variants.forEach((variant) => {
+      // Las tallas están en variant.options.Size o variant.title
+      const size = variant.options?.Size || variant.title;
+      if (size) {
+        sizes.add(size as Talla);
+      }
+    });
+  });
+  
+  // Ordenar tallas en orden lógico
+  const order: Talla[] = ["XS", "S", "M", "L", "XL", "XXL"];
+  return Array.from(sizes).sort((a, b) => {
+    const indexA = order.indexOf(a);
+    const indexB = order.indexOf(b);
+    if (indexA === -1 && indexB === -1) return a.localeCompare(b);
+    if (indexA === -1) return 1;
+    if (indexB === -1) return -1;
+    return indexA - indexB;
+  });
 }
 
 /**

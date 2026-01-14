@@ -33,21 +33,30 @@ export default function ProductPage({ params }: ProductPageProps) {
       if (!handle) return;
       
       setLoading(true);
-      const fetchedProduct = await getProductByHandle(handle);
-      
-      if (!fetchedProduct) {
+      try {
+        const fetchedProduct = await getProductByHandle(handle);
+        
+        if (!fetchedProduct) {
+          setLoading(false);
+          return;
+        }
+        
+        setProduct(fetchedProduct);
+        
+        // Seleccionar la primera variante disponible por defecto
+        const availableVariant = fetchedProduct.variants.find(
+          (v) => v.inventory_quantity === undefined || v.inventory_quantity > 0
+        ) || fetchedProduct.variants[0];
+        
+        if (availableVariant) {
+          setSelectedVariant(availableVariant);
+        }
+      } catch (error) {
+        // Error loading product - will show not found
+        setProduct(null);
+      } finally {
         setLoading(false);
-        return;
       }
-      
-      setProduct(fetchedProduct);
-      
-      // Seleccionar la primera variante por defecto
-      if (fetchedProduct.variants.length > 0) {
-        setSelectedVariant(fetchedProduct.variants[0]);
-      }
-      
-      setLoading(false);
     }
     
     fetchProduct();

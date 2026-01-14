@@ -1,55 +1,65 @@
 "use client";
 
 import { useState, useMemo, Suspense, useEffect } from "react";
-import { useSearchParams } from "next/navigation";
-import { filterProducts, getAllLeagues, getAllTeams } from "@/lib/products";
+import { useCatalogFilters } from "@/hooks/useCatalogFilters";
+import { applyFiltersToProducts, getAllSizesFromProducts } from "@/lib/filters";
+import { getAllProducts, getAllLeagues, getAllTeams, getAllSizes } from "@/lib/products";
 import ProductGrid from "@/components/ProductGrid";
-import { FilterOption, SortOption, Liga, MedusaProductAdapted } from "@/types";
+import FiltersSidebar from "@/components/filters/FiltersSidebar";
+import FiltersDrawer from "@/components/filters/FiltersDrawer";
+import ActiveFiltersChips from "@/components/filters/ActiveFiltersChips";
+import { SortOption, MedusaProductAdapted, Liga, Talla } from "@/types";
 
 function CatalogoContent() {
-  const searchParams = useSearchParams();
-  const initialLeague = searchParams.get("liga") as Liga | null;
+  const {
+    filters,
+    toggleLeague,
+    toggleTeam,
+    toggleSize,
+    updatePriceRange,
+    clearFilters,
+  } = useCatalogFilters();
 
-  const [filters, setFilters] = useState<FilterOption>({
-    league: initialLeague || undefined,
-    team: undefined,
-    minPrice: undefined,
-    maxPrice: undefined,
-  });
-  const [sortBy, setSortBy] = useState<SortOption>("popular");
-  const [showFilters, setShowFilters] = useState(false);
+  const [showFiltersDrawer, setShowFiltersDrawer] = useState(false);
   const [products, setProducts] = useState<MedusaProductAdapted[]>([]);
-  const [leagues, setLeagues] = useState<Liga[]>([]);
+  const [leagues, setLeagues] = useState<string[]>([]);
   const [teams, setTeams] = useState<string[]>([]);
+  const [sizes, setSizes] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
+  const [sortBy, setSortBy] = useState<SortOption>("popular");
 
+  // Cargar datos iniciales
   useEffect(() => {
     async function loadData() {
       setLoading(true);
       try {
-        const [filteredProducts, allLeagues, allTeams] = await Promise.all([
-          filterProducts(filters),
+        const [allProducts, allLeagues, allTeams, allSizes] = await Promise.all([
+          getAllProducts(),
           getAllLeagues(),
           getAllTeams(),
+          getAllSizes(),
         ]);
-        
-        setProducts(filteredProducts);
+
+        setProducts(allProducts);
         setLeagues(allLeagues);
         setTeams(allTeams);
+        setSizes(allSizes);
       } catch (error) {
-        console.error("Error loading products:", error);
+        // Error loading products - handled by empty state
       } finally {
         setLoading(false);
       }
     }
-    
+
     loadData();
-  }, [filters]);
+  }, []);
 
+  // Aplicar filtros y ordenamiento
   const filteredAndSortedProducts = useMemo(() => {
-    let filtered = [...products];
+    // Aplicar filtros desde URL
+    let filtered = applyFiltersToProducts(products, filters);
 
-    // Apply sorting
+    // Aplicar ordenamiento
     switch (sortBy) {
       case "price-asc":
         filtered.sort((a, b) => a.price - b.price);
@@ -74,25 +84,41 @@ function CatalogoContent() {
     }
 
     return filtered;
-  }, [products, sortBy]);
+  }, [products, filters, sortBy]);
 
-  const handleFilterChange = (key: keyof FilterOption, value: string | number | undefined) => {
-    setFilters((prev) => ({
-      ...prev,
-      [key]: value || undefined,
-    }));
+  // Calcular conteos para cada filtro (opcional, para mostrar cantidad de productos)
+  const getLeagueCount = (league: string) => {
+    return products.filter((p) => p.metadata.league === league).length;
   };
 
-  const clearFilters = () => {
-    setFilters({
-      league: undefined,
-      team: undefined,
-      minPrice: undefined,
-      maxPrice: undefined,
-    });
+  const getTeamCount = (team: string) => {
+    return products.filter((p) => p.metadata.team === team).length;
   };
 
-  const hasActiveFilters = Object.values(filters).some((v) => v !== undefined);
+  const getSizeCount = (size: string) => {
+    return products.filter((p) =>
+      p.variants.some(
+        (v) => (v.options?.Size || v.title) === size
+      )
+    ).length;
+  };
+
+  // Handlers para eliminar filtros individuales desde chips
+  const handleRemoveLeague = (league: string) => {
+    toggleLeague(league as Liga);
+  };
+
+  const handleRemoveTeam = (team: string) => {
+    toggleTeam(team);
+  };
+
+  const handleRemoveSize = (size: string) => {
+    toggleSize(size as Talla);
+  };
+
+  const handleRemovePrice = () => {
+    updatePriceRange(null, null);
+  };
 
   if (loading) {
     return (
@@ -121,97 +147,33 @@ function CatalogoContent() {
       </div>
 
       <div className="flex flex-col lg:flex-row gap-8">
-        {/* Filters Sidebar */}
-        <aside className={`lg:w-64 ${showFilters ? "block" : "hidden lg:block"}`}>
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 sticky top-24">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-lg font-semibold text-gray-900">Filtros</h2>
-              {hasActiveFilters && (
-                <button
-                  onClick={clearFilters}
-                  className="text-sm text-primary-600 hover:text-primary-700"
-                >
-                  Limpiar
-                </button>
-              )}
-            </div>
-
-            <div className="space-y-6">
-              {/* Liga Filter */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Liga
-                </label>
-                <select
-                  value={filters.league || ""}
-                  onChange={(e) => handleFilterChange("league", e.target.value || undefined)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                >
-                  <option value="">Todas las ligas</option>
-                  {leagues.map((league) => (
-                    <option key={league} value={league}>
-                      {league}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Team Filter */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Equipo
-                </label>
-                <select
-                  value={filters.team || ""}
-                  onChange={(e) => handleFilterChange("team", e.target.value || undefined)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                >
-                  <option value="">Todos los equipos</option>
-                  {teams.map((team) => (
-                    <option key={team} value={team}>
-                      {team}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Price Filter */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Precio
-                </label>
-                <div className="space-y-2">
-                  <input
-                    type="number"
-                    placeholder="Mínimo"
-                    value={filters.minPrice || ""}
-                    onChange={(e) =>
-                      handleFilterChange("minPrice", e.target.value ? Number(e.target.value) : undefined)
-                    }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                  />
-                  <input
-                    type="number"
-                    placeholder="Máximo"
-                    value={filters.maxPrice || ""}
-                    onChange={(e) =>
-                      handleFilterChange("maxPrice", e.target.value ? Number(e.target.value) : undefined)
-                    }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-        </aside>
+        {/* Filters Sidebar - Desktop */}
+        <div className="hidden lg:block">
+          <FiltersSidebar
+            filters={filters}
+            leagues={leagues as Liga[]}
+            teams={teams}
+            sizes={sizes as Talla[]}
+            onToggleLeague={toggleLeague}
+            onToggleTeam={toggleTeam}
+            onToggleSize={toggleSize}
+            onPriceChange={updatePriceRange}
+            onClearFilters={clearFilters}
+            getLeagueCount={getLeagueCount}
+            getTeamCount={getTeamCount}
+            getSizeCount={getSizeCount}
+          />
+        </div>
 
         {/* Products Section */}
         <div className="flex-1">
+          {/* Mobile Filter Button & Sort */}
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 gap-4">
             <div className="flex items-center gap-2">
               <button
-                onClick={() => setShowFilters(!showFilters)}
+                onClick={() => setShowFiltersDrawer(true)}
                 className="lg:hidden px-4 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 flex items-center gap-2"
+                aria-label="Abrir filtros"
               >
                 <svg
                   className="w-5 h-5"
@@ -245,22 +207,53 @@ function CatalogoContent() {
             </select>
           </div>
 
+          {/* Active Filters Chips */}
+          <ActiveFiltersChips
+            filters={filters}
+            onRemoveLeague={handleRemoveLeague}
+            onRemoveTeam={handleRemoveTeam}
+            onRemoveSize={handleRemoveSize}
+            onRemovePrice={handleRemovePrice}
+            onClearAll={clearFilters}
+          />
+
+          {/* Products Grid */}
           <ProductGrid products={filteredAndSortedProducts} />
         </div>
       </div>
+
+      {/* Filters Drawer - Mobile */}
+      <FiltersDrawer
+        isOpen={showFiltersDrawer}
+        onClose={() => setShowFiltersDrawer(false)}
+        filters={filters}
+        leagues={leagues as any[]}
+        teams={teams}
+        sizes={sizes as any[]}
+        onToggleLeague={toggleLeague}
+        onToggleTeam={toggleTeam}
+        onToggleSize={toggleSize}
+        onPriceChange={updatePriceRange}
+        onClearFilters={clearFilters}
+        getLeagueCount={getLeagueCount}
+        getTeamCount={getTeamCount}
+        getSizeCount={getSizeCount}
+      />
     </div>
   );
 }
 
 export default function CatalogoPage() {
   return (
-    <Suspense fallback={
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="animate-pulse">
-          <div className="h-8 bg-gray-200 rounded w-1/3 mb-8"></div>
+    <Suspense
+      fallback={
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="animate-pulse">
+            <div className="h-8 bg-gray-200 rounded w-1/3 mb-8"></div>
+          </div>
         </div>
-      </div>
-    }>
+      }
+    >
       <CatalogoContent />
     </Suspense>
   );

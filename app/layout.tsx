@@ -3,6 +3,7 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
+import { ToastProvider } from "@/contexts/ToastContext";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 
@@ -19,9 +20,11 @@ export default function RootLayout({
   return (
     <html lang="es" className={inter.variable}>
       <body className="min-h-screen flex flex-col bg-gray-50">
-        <Header />
-        <main className="flex-1">{children}</main>
-        <Footer />
+        <ToastProvider>
+          <Header />
+          <main className="flex-1">{children}</main>
+          <Footer />
+        </ToastProvider>
       </body>
     </html>
   );

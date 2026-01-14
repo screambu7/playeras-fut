@@ -116,7 +116,7 @@ El frontend estará disponible en `http://localhost:3000`
 
 - **`app/page.tsx`**: Página principal (Home)
 - **`app/catalogo/page.tsx`**: Catálogo de productos
-- **`app/producto/[slug]/page.tsx`**: Página de detalle de producto
+- **`app/producto/[handle]/page.tsx`**: Página de detalle de producto
 - **`app/carrito/page.tsx`**: Carrito de compras
 - **`lib/medusa.ts`**: Cliente Medusa
 - **`lib/products.ts`**: Funciones helper para productos

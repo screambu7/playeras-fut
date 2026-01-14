@@ -1,4 +1,5 @@
-import Medusa from "@medusajs/js-sdk";
+import Medusa from "@medusajs/medusa-js";
+import { MedusaCart } from "@/types/medusa";
 
 // Cliente Medusa para el frontend
 const medusa = new Medusa({
@@ -65,7 +66,7 @@ export interface MedusaCart {
  */
 export async function getProducts(): Promise<MedusaProduct[]> {
   try {
-    const { products } = await medusa.store.product.list({
+    const { products } = await medusa.products.list({
       limit: 100,
       offset: 0,
     });
@@ -84,7 +85,7 @@ export async function getProductByHandle(
   handle: string
 ): Promise<MedusaProduct | null> {
   try {
-    const { product } = await medusa.store.product.retrieve(handle);
+    const { product } = await medusa.products.retrieve(handle);
     return product || null;
   } catch (error) {
     console.error(`Error fetching product with handle ${handle}:`, error);
@@ -134,8 +135,8 @@ export async function getOrCreateCart(): Promise<MedusaCart | null> {
 
     if (cartId) {
       try {
-        const { cart } = await medusa.store.cart.retrieve(cartId);
-        return cart || null;
+        const { cart } = await medusa.carts.retrieve(cartId);
+        return (cart || null) as MedusaCart | null;
       } catch (error) {
         // Si el carrito no existe, crear uno nuevo
         console.warn("Cart not found, creating new one");
@@ -143,7 +144,7 @@ export async function getOrCreateCart(): Promise<MedusaCart | null> {
     }
 
     // Crear un nuevo carrito
-    const { cart } = await medusa.store.cart.create({
+    const { cart } = await medusa.carts.create({
       region_id: undefined, // Se asignará automáticamente
     });
 
@@ -151,7 +152,7 @@ export async function getOrCreateCart(): Promise<MedusaCart | null> {
       localStorage.setItem("medusa_cart_id", cart.id);
     }
 
-    return cart || null;
+    return (cart || null) as MedusaCart | null;
   } catch (error) {
     console.error("Error creating/retrieving cart:", error);
     return null;
@@ -171,7 +172,7 @@ export async function addToCart(
       throw new Error("Could not create or retrieve cart");
     }
 
-    const { cart: updatedCart } = await medusa.store.cart.lineItems.create(
+    const { cart: updatedCart } = await medusa.carts.lineItems.create(
       cart.id,
       {
         variant_id: variantId,
@@ -179,7 +180,7 @@ export async function addToCart(
       }
     );
 
-    return updatedCart || null;
+    return (updatedCart || null) as MedusaCart | null;
   } catch (error) {
     console.error("Error adding item to cart:", error);
     return null;
@@ -195,11 +196,11 @@ export async function updateCartItem(
   quantity: number
 ): Promise<MedusaCart | null> {
   try {
-    const { cart } = await medusa.store.cart.lineItems.update(cartId, lineItemId, {
+    const { cart } = await medusa.carts.lineItems.update(cartId, lineItemId, {
       quantity,
     });
 
-    return cart || null;
+    return (cart || null) as MedusaCart | null;
   } catch (error) {
     console.error("Error updating cart item:", error);
     return null;
@@ -214,9 +215,9 @@ export async function removeCartItem(
   lineItemId: string
 ): Promise<MedusaCart | null> {
   try {
-    const { cart } = await medusa.store.cart.lineItems.delete(cartId, lineItemId);
+    const { cart } = await medusa.carts.lineItems.delete(cartId, lineItemId);
 
-    return cart || null;
+    return (cart || null) as MedusaCart | null;
   } catch (error) {
     console.error("Error removing cart item:", error);
     return null;
@@ -228,8 +229,8 @@ export async function removeCartItem(
  */
 export async function getCart(cartId: string): Promise<MedusaCart | null> {
   try {
-    const { cart } = await medusa.store.cart.retrieve(cartId);
-    return cart || null;
+    const { cart } = await medusa.carts.retrieve(cartId);
+    return (cart || null) as MedusaCart | null;
   } catch (error) {
     console.error("Error retrieving cart:", error);
     return null;

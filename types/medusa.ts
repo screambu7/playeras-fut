@@ -190,5 +190,8 @@ export interface MedusaCart {
   items: MedusaCartItem[];
   subtotal: number;
   total: number;
-  currency_code: string;
+  currency_code?: string;
+  region?: {
+    currency_code: string;
+  };
 }

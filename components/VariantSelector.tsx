@@ -47,14 +47,15 @@ export default function VariantSelector({
               key={variant.id}
               onClick={() => !disabled && !isOutOfStock && onSelectVariant(variant)}
               disabled={disabled || isOutOfStock}
-              className={`px-6 py-3 border-2 rounded-lg font-medium transition-colors ${
+              className={`px-6 py-3 border-2 rounded-lg font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 min-h-[44px] min-w-[44px] ${
                 isSelected
                   ? "border-primary-600 bg-primary-50 text-primary-700"
                   : isOutOfStock
                   ? "border-gray-200 bg-gray-50 text-gray-400 cursor-not-allowed"
                   : "border-gray-300 hover:border-gray-400 text-gray-700 hover:bg-gray-50"
               } ${disabled ? "opacity-50 cursor-not-allowed" : ""}`}
-              aria-label={`Seleccionar talla ${variant.title}`}
+              aria-label={`Seleccionar talla ${variant.title}${isOutOfStock ? " (Agotado)" : ""}`}
+              aria-pressed={isSelected}
             >
               {variant.title}
               {isOutOfStock && (

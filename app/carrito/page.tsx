@@ -14,13 +14,16 @@ export default function CarritoPage() {
     loadCart();
   }, []);
 
-  // Recargar carrito cuando se actualiza (para sincronizar con header)
+  // Escuchar eventos de actualización del carrito (en lugar de polling)
   useEffect(() => {
-    const interval = setInterval(() => {
+    const handleCartUpdate = () => {
       loadCart();
-    }, 3000); // Polling cada 3 segundos
+    };
 
-    return () => clearInterval(interval);
+    window.addEventListener("cart-updated", handleCartUpdate);
+    return () => {
+      window.removeEventListener("cart-updated", handleCartUpdate);
+    };
   }, []);
 
   const loadCart = async () => {
@@ -40,12 +43,16 @@ export default function CarritoPage() {
 
     setUpdating(lineItemId);
     try {
-      const updatedCart = await updateCartItem(lineItemId, newQuantity);
-      if (updatedCart) {
-        setCart(updatedCart);
+      const result = await updateCartItem(lineItemId, newQuantity);
+      if (result.cart) {
+        setCart(result.cart);
+        window.dispatchEvent(new CustomEvent("cart-updated"));
+      } else if (result.error) {
+        // Error ya está manejado por la función, solo actualizamos estado
+        // En producción, podrías mostrar un toast aquí
       }
     } catch (error) {
-      console.error("Error updating quantity:", error);
+      // Error inesperado
     } finally {
       setUpdating(null);
     }
@@ -54,12 +61,15 @@ export default function CarritoPage() {
   const handleRemoveItem = async (lineItemId: string) => {
     setUpdating(lineItemId);
     try {
-      const updatedCart = await removeFromCart(lineItemId);
-      if (updatedCart) {
-        setCart(updatedCart);
+      const result = await removeFromCart(lineItemId);
+      if (result.cart) {
+        setCart(result.cart);
+        window.dispatchEvent(new CustomEvent("cart-updated"));
+      } else if (result.error) {
+        // Error ya está manejado por la función
       }
     } catch (error) {
-      console.error("Error removing item:", error);
+      // Error inesperado
     } finally {
       setUpdating(null);
     }
@@ -100,7 +110,7 @@ export default function CarritoPage() {
     );
   }
 
-  const total = calculateCartTotal(cart) / 100; // Convertir de centavos a euros
+  const total = calculateCartTotal(cart); // Ya viene en euros
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -113,8 +123,8 @@ export default function CarritoPage() {
         <div className="lg:col-span-2 space-y-4">
           {cart.items.map((item: MedusaCartItem) => {
             const product = item.variant.product;
-            // El precio viene en unit_price (ya en centavos)
-            const priceInEuros = item.unit_price / 100;
+            // El precio viene en unit_price (en centavos)
+            const priceInEuros = (item.unit_price || 0) / 100;
             const itemTotal = priceInEuros * item.quantity;
             const isUpdating = updating === item.id;
 
@@ -238,15 +248,12 @@ export default function CarritoPage() {
                 </div>
               </div>
             </div>
-            <button
-              disabled
-              className="w-full bg-gray-400 text-white font-semibold py-4 rounded-lg cursor-not-allowed mb-4"
+            <Link
+              href="/checkout"
+              className="block w-full bg-primary-600 text-white font-semibold py-4 rounded-lg hover:bg-primary-700 transition-colors text-center mb-4"
             >
               Continuar Compra
-            </button>
-            <p className="text-xs text-gray-500 text-center">
-              El proceso de pago estará disponible en la Fase 2
-            </p>
+            </Link>
             <Link
               href="/catalogo"
               className="block text-center text-primary-600 hover:text-primary-700 font-medium mt-4"

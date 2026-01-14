@@ -10,10 +10,13 @@
     "git:help": "echo 'Carga los helpers con: source scripts/git-helpers.sh'"
   },
   "dependencies": {
+    "@hookform/resolvers": "^5.2.2",
     "@medusajs/medusa-js": "^1.3.1",
     "next": "^14.2.0",
     "react": "^18.3.0",
     "react-dom": "^18.3.0",
+    "react-hook-form": "^7.71.1",
+    "zod": "^4.3.5",
     "zustand": "^4.5.0"
   },
   "devDependencies": {

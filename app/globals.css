@@ -16,3 +16,34 @@
     overflow: hidden;
   }
 }
+
+/* Mejoras de accesibilidad: focus visible mejorado */
+@layer base {
+  *:focus-visible {
+    outline: 2px solid theme('colors.primary.500');
+    outline-offset: 2px;
+  }
+  
+  /* Mejorar contraste en estados disabled */
+  button:disabled,
+  input:disabled,
+  select:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+}
+
+@keyframes slide-in-right {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.animate-slide-in-right {
+  animation: slide-in-right 0.3s ease-out;
+}

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { addToCart } from "@/lib/cart-medusa";
 import { MedusaProductVariant } from "@/types";
+import { useToast } from "@/contexts/ToastContext";
 
 interface AddToCartButtonProps {
   variant: MedusaProductVariant | null;
@@ -31,6 +32,7 @@ export default function AddToCartButton({
   const [isAdding, setIsAdding] = useState(false);
   const [success, setSuccess] = useState(false);
   const router = useRouter();
+  const { success: showSuccessToast, error: showErrorToast } = useToast();
 
   const handleAddToCart = async () => {
     if (!variant) {
@@ -47,14 +49,14 @@ export default function AddToCartButton({
     setSuccess(false);
 
     try {
-      const cart = await addToCart(variant.id, quantity);
+      const result = await addToCart(variant.id, quantity);
 
-      if (cart) {
+      if (result.cart) {
         setSuccess(true);
         onSuccess?.();
 
         if (showSuccessMessage) {
-          // Mostrar mensaje de éxito temporal
+          showSuccessToast("Producto agregado al carrito", 3000);
           setTimeout(() => setSuccess(false), 2000);
         }
 
@@ -66,11 +68,13 @@ export default function AddToCartButton({
         // Opcional: refrescar el carrito en el header
         router.refresh();
       } else {
-        throw new Error("Error al agregar el producto al carrito");
+        const errorMessage = result.error?.message || "Error al agregar el producto al carrito";
+        showErrorToast(errorMessage);
+        onError?.(new Error(errorMessage));
       }
     } catch (error) {
       const err = error instanceof Error ? error : new Error("Error desconocido");
-      console.error("Error adding to cart:", err);
+      showErrorToast(err.message || "Error al agregar el producto");
       onError?.(err);
     } finally {
       setIsAdding(false);
@@ -83,14 +87,15 @@ export default function AddToCartButton({
     <button
       onClick={handleAddToCart}
       disabled={isDisabled}
-      className={`w-full font-semibold py-4 rounded-lg transition-colors ${
+      className={`w-full font-semibold py-4 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 min-h-[44px] ${
         success
           ? "bg-green-600 text-white"
           : isDisabled
           ? "bg-gray-400 text-white cursor-not-allowed"
           : "bg-primary-600 text-white hover:bg-primary-700"
       } ${className}`}
-      aria-label="Agregar al carrito"
+      aria-label={isAdding ? "Agregando al carrito..." : variant ? `Agregar ${variant.title} al carrito` : "Agregar al carrito"}
+      aria-busy={isAdding}
     >
       {isAdding ? (
         <span className="flex items-center justify-center">

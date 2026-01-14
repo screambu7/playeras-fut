@@ -2,21 +2,22 @@
  * Funciones para manejar el carrito usando Medusa Cart API
  */
 
-import medusaClient, { medusa } from "./medusa";
+import { medusa } from "./medusa";
 import { MedusaCart, MedusaCartItem } from "@/types/medusa";
+import { createApiError, ApiError } from "./error-handler";
 
 let cartId: string | null = null;
 
 /**
  * Obtener o crear un carrito
  */
-export async function getOrCreateCart(): Promise<MedusaCart | null> {
+export async function getOrCreateCart(): Promise<{ cart: MedusaCart | null; error?: ApiError }> {
   try {
     // Si ya tenemos un cartId, intentar recuperarlo
     if (cartId) {
       try {
-        const { cart } = await medusa.store.cart.retrieve(cartId);
-        return cart;
+        const { cart } = await medusa.carts.retrieve(cartId);
+        return { cart: cart as unknown as MedusaCart };
       } catch (error) {
         // Si el carrito no existe, crear uno nuevo
         cartId = null;
@@ -24,7 +25,7 @@ export async function getOrCreateCart(): Promise<MedusaCart | null> {
     }
     
     // Crear un nuevo carrito
-    const { cart } = await medusa.store.cart.create({});
+    const { cart } = await medusa.carts.create({});
     cartId = cart.id;
     
     // Guardar cartId en localStorage
@@ -32,10 +33,9 @@ export async function getOrCreateCart(): Promise<MedusaCart | null> {
       localStorage.setItem("medusa_cart_id", cart.id);
     }
     
-    return cart;
+    return { cart: cart as unknown as MedusaCart };
   } catch (error) {
-    console.error("Error getting or creating cart:", error);
-    return null;
+    return { cart: null, error: createApiError(error) };
   }
 }
 
@@ -58,16 +58,17 @@ export async function getCart(): Promise<MedusaCart | null> {
   restoreCartId();
   
   if (!cartId) {
-    return await getOrCreateCart();
+    const result = await getOrCreateCart();
+    return result.cart;
   }
   
   try {
-    const { cart } = await medusa.store.cart.retrieve(cartId);
-    return cart;
+    const { cart } = await medusa.carts.retrieve(cartId);
+    return cart as unknown as MedusaCart;
   } catch (error) {
-    console.error("Error retrieving cart:", error);
-    // Si falla, crear uno nuevo
-    return await getOrCreateCart();
+    // Si falla, intentar crear uno nuevo
+    const result = await getOrCreateCart();
+    return result.cart;
   }
 }
 
@@ -77,23 +78,22 @@ export async function getCart(): Promise<MedusaCart | null> {
 export async function addToCart(
   variantId: string,
   quantity: number = 1
-): Promise<MedusaCart | null> {
-  const cart = await getOrCreateCart();
+): Promise<{ cart: MedusaCart | null; error?: ApiError }> {
+  const cartResult = await getOrCreateCart();
   
-  if (!cart) {
-    return null;
+  if (!cartResult.cart) {
+    return { cart: null, error: cartResult.error };
   }
   
   try {
-    const { cart: updatedCart } = await medusa.store.cart.lineItems.create(cart.id, {
+    const { cart: updatedCart } = await medusa.carts.lineItems.create(cartResult.cart.id, {
       variant_id: variantId,
       quantity,
     });
     
-    return updatedCart;
+    return { cart: updatedCart as unknown as MedusaCart };
   } catch (error) {
-    console.error("Error adding to cart:", error);
-    return null;
+    return { cart: null, error: createApiError(error) };
   }
 }
 
@@ -103,41 +103,39 @@ export async function addToCart(
 export async function updateCartItem(
   lineItemId: string,
   quantity: number
-): Promise<MedusaCart | null> {
+): Promise<{ cart: MedusaCart | null; error?: ApiError }> {
   const cart = await getCart();
   
   if (!cart) {
-    return null;
+    return { cart: null, error: { message: "Carrito no encontrado", isNetworkError: false, isTimeout: false } };
   }
   
   try {
-    const { cart: updatedCart } = await medusa.store.cart.lineItems.update(cart.id, lineItemId, {
+    const { cart: updatedCart } = await medusa.carts.lineItems.update(cart.id, lineItemId, {
       quantity,
     });
     
-    return updatedCart;
+    return { cart: updatedCart as unknown as MedusaCart };
   } catch (error) {
-    console.error("Error updating cart item:", error);
-    return null;
+    return { cart: null, error: createApiError(error) };
   }
 }
 
 /**
  * Eliminar un item del carrito
  */
-export async function removeFromCart(lineItemId: string): Promise<MedusaCart | null> {
+export async function removeFromCart(lineItemId: string): Promise<{ cart: MedusaCart | null; error?: ApiError }> {
   const cart = await getCart();
   
   if (!cart) {
-    return null;
+    return { cart: null, error: { message: "Carrito no encontrado", isNetworkError: false, isTimeout: false } };
   }
   
   try {
-    const { cart: updatedCart } = await medusa.store.cart.lineItems.delete(cart.id, lineItemId);
-    return updatedCart;
+    const { cart: updatedCart } = await medusa.carts.lineItems.delete(cart.id, lineItemId);
+    return { cart: updatedCart as unknown as MedusaCart };
   } catch (error) {
-    console.error("Error removing from cart:", error);
-    return null;
+    return { cart: null, error: createApiError(error) };
   }
 }
 
@@ -145,7 +143,8 @@ export async function removeFromCart(lineItemId: string): Promise<MedusaCart | n
  * Calcular el total del carrito
  */
 export function calculateCartTotal(cart: MedusaCart): number {
-  return cart.total || 0;
+  // Medusa devuelve total en centavos, convertir a euros
+  return (cart.total || 0) / 100;
 }
 
 /**
