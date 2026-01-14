@@ -1,8 +1,15 @@
 /**
- * Funciones helper para obtener productos desde Medusa API
+ * Funciones helper para obtener productos desde Medusa Store API
+ * 
+ * Usa el cliente Store API con Publishable API Key
+ * Separado de la lógica de negocio para mantener SoC
  */
 
-import { medusa } from "./medusa";
+import {
+  listProducts,
+  getProductByHandle as getProductByHandleStore,
+  MedusaStoreProduct,
+} from "./medusa-store";
 import { adaptMedusaProduct, MedusaProductAdapted } from "@/types/medusa";
 import { Liga, Talla } from "@/types";
 
@@ -11,10 +18,10 @@ import { Liga, Talla } from "@/types";
  */
 export async function getAllProducts(): Promise<MedusaProductAdapted[]> {
   try {
-    const { products } = await medusa.products.list();
-    return products.map(adaptMedusaProduct);
+    const products = await listProducts();
+    return products.map((product) => adaptMedusaProduct(product as any));
   } catch (error) {
-    console.error("Error fetching products:", error);
+    console.error("[Products] Error fetching products:", error);
     return [];
   }
 }
@@ -22,12 +29,17 @@ export async function getAllProducts(): Promise<MedusaProductAdapted[]> {
 /**
  * Obtener un producto por handle
  */
-export async function getProductByHandle(handle: string): Promise<MedusaProductAdapted | null> {
+export async function getProductByHandle(
+  handle: string
+): Promise<MedusaProductAdapted | null> {
   try {
-    const { product } = await medusa.products.retrieve(handle);
-    return adaptMedusaProduct(product);
+    const product = await getProductByHandleStore(handle);
+    if (!product) {
+      return null;
+    }
+    return adaptMedusaProduct(product as any);
   } catch (error) {
-    console.error(`Error fetching product ${handle}:`, error);
+    console.error(`[Products] Error fetching product ${handle}:`, error);
     return null;
   }
 }
