@@ -16,6 +16,11 @@
     "build": "medusa build",
     "seed": "medusa exec ./src/scripts/seed.ts",
     "seed:jerseys": "medusa exec ./src/scripts/seed-football-jerseys.ts",
+    "migrate:supabase": "medusa exec ./src/scripts/migrate-supabase-to-medusa.ts",
+    "migrate:supabase:direct": "ts-node ./src/scripts/migrate-supabase-direct.ts",
+    "migrate:supabase:wait": "ts-node ./src/scripts/wait-and-migrate.ts",
+    "export:supabase": "ts-node ./src/scripts/export-supabase-products.ts",
+    "remove:duplicates": "ts-node ./src/scripts/remove-duplicate-products.ts",
     "start": "medusa start",
     "dev": "medusa develop",
     "test:integration:http": "TEST_TYPE=integration:http NODE_OPTIONS=--experimental-vm-modules jest --silent=false --runInBand --forceExit",
@@ -26,7 +31,8 @@
     "@medusajs/admin-sdk": "2.12.5",
     "@medusajs/cli": "2.12.5",
     "@medusajs/framework": "2.12.5",
-    "@medusajs/medusa": "2.12.5"
+    "@medusajs/medusa": "2.12.5",
+    "@supabase/supabase-js": "^2.90.1"
   },
   "devDependencies": {
     "@medusajs/test-utils": "2.12.5",
@@ -34,9 +40,11 @@
     "@swc/jest": "^0.2.36",
     "@types/jest": "^29.5.13",
     "@types/node": "^20.12.11",
+    "@types/pg": "^8.16.0",
     "@types/react": "^18.3.2",
     "@types/react-dom": "^18.2.25",
     "jest": "^29.7.0",
+    "pg": "^8.17.1",
     "prop-types": "^15.8.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",

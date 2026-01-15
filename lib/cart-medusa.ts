@@ -13,14 +13,22 @@ let cartId: string | null = null;
  */
 export async function getOrCreateCart(): Promise<{ cart: MedusaCart | null; error?: ApiError }> {
   try {
-    // Si ya tenemos un cartId, intentar recuperarlo
+    // Restaurar cartId del localStorage si no está en memoria
+    if (!cartId) {
+      restoreCartId();
+    }
+
+    // Si tenemos un cartId, intentar recuperarlo
     if (cartId) {
       try {
         const { cart } = await medusa.carts.retrieve(cartId);
         return { cart: cart as unknown as MedusaCart };
       } catch (error) {
-        // Si el carrito no existe, crear uno nuevo
+        // Si el carrito no existe, limpiar y crear uno nuevo
         cartId = null;
+        if (typeof window !== "undefined") {
+          localStorage.removeItem("medusa_cart_id");
+        }
       }
     }
     
@@ -79,9 +87,23 @@ export async function addToCart(
   variantId: string,
   quantity: number = 1
 ): Promise<{ cart: MedusaCart | null; error?: ApiError }> {
+  if (!variantId) {
+    return { 
+      cart: null, 
+      error: { 
+        message: "Variant ID es requerido", 
+        isNetworkError: false, 
+        isTimeout: false 
+      } 
+    };
+  }
+
   const cartResult = await getOrCreateCart();
   
   if (!cartResult.cart) {
+    if (process.env.NODE_ENV === "development") {
+      console.error("Error al obtener/crear carrito:", cartResult.error);
+    }
     return { cart: null, error: cartResult.error };
   }
   
@@ -91,8 +113,19 @@ export async function addToCart(
       quantity,
     });
     
+    // Actualizar cartId en memoria y localStorage si cambió
+    if (updatedCart?.id && updatedCart.id !== cartId) {
+      cartId = updatedCart.id;
+      if (typeof window !== "undefined") {
+        localStorage.setItem("medusa_cart_id", updatedCart.id);
+      }
+    }
+    
     return { cart: updatedCart as unknown as MedusaCart };
   } catch (error) {
+    if (process.env.NODE_ENV === "development") {
+      console.error("Error al agregar item al carrito:", error);
+    }
     return { cart: null, error: createApiError(error) };
   }
 }

@@ -1,51 +1,157 @@
 /**
- * Funciones helper para obtener productos desde Medusa Store API
+ * Funciones helper para obtener productos
  * 
- * Usa el cliente Store API con Publishable API Key
+ * Estrategia híbrida: Intenta usar Medusa primero, si no hay productos o falla,
+ * usa Supabase como fallback para permitir migración gradual.
  * Separado de la lógica de negocio para mantener SoC
  */
 
-import {
-  listProducts,
-  getProductByHandle as getProductByHandleStore,
-  MedusaStoreProduct,
-} from "./medusa-store";
+import { medusa } from "./medusa";
 import { adaptMedusaProduct, MedusaProductAdapted } from "@/types/medusa";
-import { Liga, Talla } from "@/types";
+import { Liga, Talla, Genero, Version } from "@/types";
+import {
+  getAllSupabaseProducts,
+  getSupabaseProductById,
+  filterSupabaseProducts,
+  getAllLeaguesFromSupabase,
+  getAllTeamsFromSupabase,
+  getAllSizesFromSupabase,
+  getAllGenerosFromSupabase,
+  getAllVersionsFromSupabase,
+  adaptSupabaseProduct,
+} from "./supabase-products";
+
+/**
+ * Títulos de productos que tienen duplicados y deben mostrarse solo una vez
+ */
+const DUPLICATE_PRODUCT_TITLES = [
+  "2026 Brazil Away Jersey",
+  "2026 Spain Player Version",
+];
+
+/**
+ * Elimina productos duplicados del array
+ * Mantiene solo 1 de cada tipo (el primero encontrado)
+ * 
+ * Estrategia: Para productos con títulos duplicados específicos,
+ * mantiene solo el primero que encuentra en el array.
+ */
+function removeDuplicateProducts(
+  products: MedusaProductAdapted[]
+): MedusaProductAdapted[] {
+  const seenTitles = new Set<string>();
+  const duplicateTitlesSet = new Set(
+    DUPLICATE_PRODUCT_TITLES.map((t) => t.trim().toLowerCase())
+  );
+
+  // Filtrar productos duplicados: mantener solo el primero de cada título duplicado
+  const uniqueProducts: MedusaProductAdapted[] = [];
+
+  for (const product of products) {
+    const normalizedTitle = product.title.trim().toLowerCase();
+
+    // Solo aplicar deduplicación a los títulos específicos
+    if (duplicateTitlesSet.has(normalizedTitle)) {
+      // Si ya vimos este título, saltarlo (es un duplicado)
+      if (seenTitles.has(normalizedTitle)) {
+        continue;
+      }
+      // Primera vez que vemos este título, marcarlo y agregarlo
+      seenTitles.add(normalizedTitle);
+    }
+
+    // Agregar el producto (ya sea único o el primero de un duplicado)
+    uniqueProducts.push(product);
+  }
+
+  return uniqueProducts;
+}
 
 /**
  * Obtener todos los productos
+ * Intenta Medusa primero, fallback a Supabase si no hay productos
+ * Elimina duplicados en el frontend antes de devolver
  */
 export async function getAllProducts(): Promise<MedusaProductAdapted[]> {
+  let allProducts: MedusaProductAdapted[] = [];
+
   try {
-    const products = await listProducts();
-    return products.map((product) => adaptMedusaProduct(product as any));
+    // Intentar obtener de Medusa
+    const { products } = await medusa.products.list({
+      limit: 1000,
+      offset: 0,
+    });
+
+    // Si hay productos en Medusa, usarlos
+    if (products && products.length > 0) {
+      allProducts = products.map(adaptMedusaProduct);
+    } else {
+      // Si no hay productos en Medusa, usar Supabase como fallback
+      console.log("[Products] No products in Medusa, falling back to Supabase");
+      const supabaseProducts = await getAllSupabaseProducts();
+      allProducts = supabaseProducts.map(adaptSupabaseProduct);
+    }
   } catch (error) {
-    console.error("[Products] Error fetching products:", error);
-    return [];
+    // Si Medusa falla, usar Supabase como fallback
+    console.warn("[Products] Error fetching from Medusa, falling back to Supabase:", error);
+    try {
+      const supabaseProducts = await getAllSupabaseProducts();
+      allProducts = supabaseProducts.map(adaptSupabaseProduct);
+    } catch (supabaseError) {
+      console.error("[Products] Error fetching products from both sources:", supabaseError);
+      return [];
+    }
   }
+
+  // Eliminar duplicados antes de devolver
+  return removeDuplicateProducts(allProducts);
 }
 
 /**
  * Obtener un producto por handle
+ * Intenta Medusa primero, fallback a Supabase
  */
 export async function getProductByHandle(
   handle: string
 ): Promise<MedusaProductAdapted | null> {
   try {
-    const product = await getProductByHandleStore(handle);
-    if (!product) {
-      return null;
+    // Intentar obtener de Medusa
+    const { product } = await medusa.products.retrieve(handle);
+    if (product) {
+      return adaptMedusaProduct(product);
     }
-    return adaptMedusaProduct(product as any);
   } catch (error) {
-    console.error(`[Products] Error fetching product ${handle}:`, error);
+    // Si no existe en Medusa o falla, intentar Supabase
+    console.log(`[Products] Product ${handle} not found in Medusa, trying Supabase`);
+  }
+
+  // Fallback a Supabase
+  try {
+    // Buscar en todos los productos de Supabase por handle generado
+    const allProducts = await getAllSupabaseProducts();
+    
+    for (const supabaseProduct of allProducts) {
+      const adaptedProduct = adaptSupabaseProduct(supabaseProduct);
+      if (adaptedProduct.handle === handle) {
+        return adaptedProduct;
+      }
+    }
+
+    // Si no se encuentra por handle, intentar buscar por ID directo
+    const productById = await getSupabaseProductById(handle);
+    if (productById) {
+      return adaptSupabaseProduct(productById);
+    }
+
+    return null;
+  } catch (error) {
+    console.error(`[Products] Error fetching product ${handle} from Supabase:`, error);
     return null;
   }
 }
 
 /**
- * Obtener productos destacados
+ * Obtener productos destacados desde Medusa
  */
 export async function getFeaturedProducts(): Promise<MedusaProductAdapted[]> {
   const products = await getAllProducts();
@@ -53,7 +159,7 @@ export async function getFeaturedProducts(): Promise<MedusaProductAdapted[]> {
 }
 
 /**
- * Obtener productos más vendidos
+ * Obtener productos más vendidos desde Medusa
  */
 export async function getBestSellerProducts(): Promise<MedusaProductAdapted[]> {
   const products = await getAllProducts();
@@ -62,91 +168,211 @@ export async function getBestSellerProducts(): Promise<MedusaProductAdapted[]> {
 
 /**
  * Obtener todas las ligas disponibles
+ * Usa la fuente de datos actual (Medusa o Supabase)
  */
 export async function getAllLeagues(): Promise<Liga[]> {
-  const products = await getAllProducts();
-  const leagues = new Set<Liga>();
-  
-  products.forEach((product) => {
-    if (product.metadata.league) {
-      leagues.add(product.metadata.league as Liga);
-    }
-  });
-  
-  return Array.from(leagues).sort();
+  try {
+    // Intentar obtener de Supabase directamente (más eficiente)
+    const leagues = await getAllLeaguesFromSupabase();
+    const validLeagues: Liga[] = [
+      "La Liga",
+      "Premier League",
+      "Serie A",
+      "Bundesliga",
+      "Ligue 1",
+      "Champions League",
+    ];
+    return leagues.filter((league): league is Liga =>
+      validLeagues.includes(league as Liga)
+    );
+  } catch (error) {
+    // Fallback: obtener desde productos
+    console.warn("[Products] Error fetching leagues from Supabase, using products:", error);
+    const products = await getAllProducts();
+    const leagues = new Set<string>();
+
+    products.forEach((product) => {
+      if (product.metadata.league) {
+        leagues.add(product.metadata.league);
+      }
+    });
+
+    const validLeagues: Liga[] = [
+      "La Liga",
+      "Premier League",
+      "Serie A",
+      "Bundesliga",
+      "Ligue 1",
+      "Champions League",
+    ];
+
+    return Array.from(leagues).filter((league): league is Liga =>
+      validLeagues.includes(league as Liga)
+    );
+  }
 }
 
 /**
  * Obtener todos los equipos disponibles
+ * Usa la fuente de datos actual (Medusa o Supabase)
  */
 export async function getAllTeams(): Promise<string[]> {
-  const products = await getAllProducts();
-  const teams = new Set<string>();
-  
-  products.forEach((product) => {
-    if (product.metadata.team) {
-      teams.add(product.metadata.team);
-    }
-  });
-  
-  return Array.from(teams).sort();
+  try {
+    // Intentar obtener de Supabase directamente (más eficiente)
+    return await getAllTeamsFromSupabase();
+  } catch (error) {
+    // Fallback: obtener desde productos
+    console.warn("[Products] Error fetching teams from Supabase, using products:", error);
+    const products = await getAllProducts();
+    const teams = new Set<string>();
+
+    products.forEach((product) => {
+      if (product.metadata.team) {
+        teams.add(product.metadata.team);
+      }
+    });
+
+    return Array.from(teams).sort();
+  }
 }
 
 /**
  * Obtener todas las tallas disponibles
+ * Usa la fuente de datos actual (Medusa o Supabase)
  */
 export async function getAllSizes(): Promise<Talla[]> {
-  const products = await getAllProducts();
-  const sizes = new Set<Talla>();
-  
-  products.forEach((product) => {
-    product.variants.forEach((variant) => {
-      // Las tallas están en variant.options.Size o variant.title
-      const size = variant.options?.Size || variant.title;
-      if (size) {
-        sizes.add(size as Talla);
+  try {
+    // Intentar obtener de Supabase directamente (más eficiente)
+    const sizes = await getAllSizesFromSupabase();
+    const validSizes: Talla[] = ["XS", "S", "M", "L", "XL", "XXL"];
+    return sizes.filter((size): size is Talla =>
+      validSizes.includes(size)
+    );
+  } catch (error) {
+    // Fallback: obtener desde productos
+    console.warn("[Products] Error fetching sizes from Supabase, using products:", error);
+    const products = await getAllProducts();
+    const sizes = new Set<Talla>();
+
+    products.forEach((product) => {
+      product.variants.forEach((variant) => {
+        const size = variant.options.Size as Talla;
+        if (size) {
+          sizes.add(size);
+        }
+      });
+    });
+
+    const validSizes: Talla[] = ["XS", "S", "M", "L", "XL", "XXL"];
+    return Array.from(sizes).filter((size): size is Talla =>
+      validSizes.includes(size)
+    );
+  }
+}
+
+/**
+ * Obtener todos los géneros disponibles
+ * Usa la fuente de datos actual (Medusa o Supabase)
+ */
+export async function getAllGeneros(): Promise<Genero[]> {
+  try {
+    // Intentar obtener de Supabase directamente (más eficiente)
+    return await getAllGenerosFromSupabase();
+  } catch (error) {
+    // Fallback: obtener desde productos
+    console.warn("[Products] Error fetching generos from Supabase, using products:", error);
+    const products = await getAllProducts();
+    const generos = new Set<Genero>();
+
+    products.forEach((product) => {
+      if (product.metadata.genero) {
+        generos.add(product.metadata.genero);
       }
     });
-  });
-  
-  // Ordenar tallas en orden lógico
-  const order: Talla[] = ["XS", "S", "M", "L", "XL", "XXL"];
-  return Array.from(sizes).sort((a, b) => {
-    const indexA = order.indexOf(a);
-    const indexB = order.indexOf(b);
-    if (indexA === -1 && indexB === -1) return a.localeCompare(b);
-    if (indexA === -1) return 1;
-    if (indexB === -1) return -1;
-    return indexA - indexB;
-  });
+
+    return Array.from(generos).sort();
+  }
+}
+
+/**
+ * Obtener todas las versiones disponibles
+ * Usa la fuente de datos actual (Medusa o Supabase)
+ */
+export async function getAllVersions(): Promise<Version[]> {
+  try {
+    // Intentar obtener de Supabase directamente (más eficiente)
+    return await getAllVersionsFromSupabase();
+  } catch (error) {
+    // Fallback: obtener desde productos
+    console.warn("[Products] Error fetching versions from Supabase, using products:", error);
+    const products = await getAllProducts();
+    const versions = new Set<Version>();
+
+    products.forEach((product) => {
+      if (product.metadata.version) {
+        versions.add(product.metadata.version);
+      }
+    });
+
+    return Array.from(versions).sort();
+  }
 }
 
 /**
  * Filtrar productos por criterios
+ * Usa la fuente de datos actual (Medusa o Supabase)
  */
 export async function filterProducts(filters: {
   league?: Liga;
   team?: string;
+  genero?: Genero;
+  version?: Version;
   minPrice?: number;
   maxPrice?: number;
 }): Promise<MedusaProductAdapted[]> {
-  let products = await getAllProducts();
-  
-  if (filters.league) {
-    products = products.filter((p) => p.metadata.league === filters.league);
+  try {
+    // Intentar usar filtros de Supabase (más eficiente)
+    const supabaseProducts = await filterSupabaseProducts({
+      league: filters.league,
+      team: filters.team,
+      genero: filters.genero,
+      version: filters.version,
+      minPrice: filters.minPrice,
+      maxPrice: filters.maxPrice,
+    });
+
+    return supabaseProducts.map(adaptSupabaseProduct);
+  } catch (error) {
+    // Fallback: filtrar en memoria desde todos los productos
+    console.warn("[Products] Error filtering from Supabase, filtering in memory:", error);
+    const allProducts = await getAllProducts();
+
+    return allProducts.filter((product) => {
+      if (filters.league && product.metadata.league !== filters.league) {
+        return false;
+      }
+
+      if (filters.team && product.metadata.team !== filters.team) {
+        return false;
+      }
+
+      if (filters.genero && product.metadata.genero !== filters.genero) {
+        return false;
+      }
+
+      if (filters.version && product.metadata.version !== filters.version) {
+        return false;
+      }
+
+      if (filters.minPrice !== undefined && product.price < filters.minPrice) {
+        return false;
+      }
+
+      if (filters.maxPrice !== undefined && product.price > filters.maxPrice) {
+        return false;
+      }
+
+      return true;
+    });
   }
-  
-  if (filters.team) {
-    products = products.filter((p) => p.metadata.team === filters.team);
-  }
-  
-  if (filters.minPrice !== undefined) {
-    products = products.filter((p) => p.price >= filters.minPrice!);
-  }
-  
-  if (filters.maxPrice !== undefined) {
-    products = products.filter((p) => p.price <= filters.maxPrice!);
-  }
-  
-  return products;
 }

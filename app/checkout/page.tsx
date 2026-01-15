@@ -9,14 +9,19 @@ import {
   setShippingAddress,
   getShippingOptions,
   setShippingOption,
+  getDefaultRegion,
+  setCartRegion,
+  initPaymentSessions,
+  getCartPaymentSessions,
   setPaymentSession,
   completeCheckout,
 } from "@/lib/checkout";
 import { checkoutSchema, CheckoutFormData } from "@/lib/checkout-schema";
 import { MedusaCart } from "@/types/medusa";
-import { ShippingOption } from "@/types/checkout";
+import { ShippingOption, PaymentSession } from "@/types/checkout";
 import AddressForm from "@/components/checkout/AddressForm";
 import ShippingSelector from "@/components/checkout/ShippingSelector";
+import PaymentMethodSelector from "@/components/checkout/PaymentMethodSelector";
 import OrderSummary from "@/components/checkout/OrderSummary";
 import { useToast } from "@/contexts/ToastContext";
 import Loader from "@/components/ui/Loader";
@@ -31,6 +36,9 @@ export default function CheckoutPage() {
   const [loadingShipping, setLoadingShipping] = useState(false);
   const [selectedShippingId, setSelectedShippingId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [paymentSessions, setPaymentSessions] = useState<PaymentSession[]>([]);
+  const [loadingPaymentSessions, setLoadingPaymentSessions] = useState(false);
+  const [selectedPaymentProvider, setSelectedPaymentProvider] = useState<string | null>(null);
 
   const {
     register,
@@ -46,6 +54,7 @@ export default function CheckoutPage() {
   });
 
   const watchedShippingOption = watch("shipping_option_id");
+  const watchedPaymentProvider = watch("payment_provider_id");
 
   // Cargar carrito al montar
   useEffect(() => {
@@ -76,12 +85,51 @@ export default function CheckoutPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [watch]);
 
-  // Sincronizar selectedShippingId con el formulario
+  // Sincronizar selectedShippingId con el formulario y actualizar cart
   useEffect(() => {
-    if (watchedShippingOption) {
+    if (watchedShippingOption && watchedShippingOption !== selectedShippingId) {
       setSelectedShippingId(watchedShippingOption);
+      
+      // Actualizar shipping option en el cart
+      if (cart) {
+        setShippingOption(cart.id, watchedShippingOption).then((result) => {
+          if (result.success) {
+            // Recargar el carrito para obtener totales actualizados
+            getCart().then((updatedCart) => {
+              if (updatedCart) {
+                setCart(updatedCart);
+                // Cargar payment sessions después de actualizar shipping
+                loadPaymentSessions(updatedCart.id);
+              }
+            });
+          }
+        });
+      }
     }
-  }, [watchedShippingOption]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [watchedShippingOption, cart]);
+
+  // Sincronizar selectedPaymentProvider con el formulario
+  useEffect(() => {
+    if (watchedPaymentProvider && watchedPaymentProvider !== selectedPaymentProvider) {
+      setSelectedPaymentProvider(watchedPaymentProvider);
+      
+      // Actualizar payment session en el cart
+      if (cart) {
+        setPaymentSession(cart.id, watchedPaymentProvider).then((result) => {
+          if (result.success) {
+            // Recargar el carrito para obtener datos actualizados
+            getCart().then((updatedCart) => {
+              if (updatedCart) {
+                setCart(updatedCart);
+              }
+            });
+          }
+        });
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [watchedPaymentProvider, cart]);
 
   const loadCart = async () => {
     setLoading(true);
@@ -99,7 +147,28 @@ export default function CheckoutPage() {
         return;
       }
 
-      setCart(cartData);
+      // Asociar región al carrito si no tiene una
+      if (!cartData.region) {
+        const regionResult = await getDefaultRegion();
+        if (regionResult.regionId) {
+          const regionUpdateResult = await setCartRegion(cartData.id, regionResult.regionId);
+          if (regionUpdateResult.success) {
+            // Recargar el carrito para obtener los datos actualizados
+            const updatedCart = await getCart();
+            if (updatedCart) {
+              setCart(updatedCart);
+            } else {
+              setCart(cartData);
+            }
+          } else {
+            setCart(cartData);
+          }
+        } else {
+          setCart(cartData);
+        }
+      } else {
+        setCart(cartData);
+      }
     } catch (error) {
       showError("Error al cargar el carrito. Por favor, intenta nuevamente.");
       router.push("/carrito");
@@ -132,6 +201,12 @@ export default function CheckoutPage() {
         return;
       }
 
+      // Recargar el carrito para obtener datos actualizados
+      const updatedCart = await getCart();
+      if (updatedCart) {
+        setCart(updatedCart);
+      }
+
       // Luego obtener opciones de envío
       const optionsResult = await getShippingOptions(cart.id);
       if (optionsResult.error) {
@@ -145,12 +220,56 @@ export default function CheckoutPage() {
       // Si solo hay una opción, seleccionarla automáticamente
       if (optionsResult.options.length === 1) {
         setValue("shipping_option_id", optionsResult.options[0].id);
-        await setShippingOption(cart.id, optionsResult.options[0].id);
+        const shippingResult = await setShippingOption(cart.id, optionsResult.options[0].id);
+        if (shippingResult.success) {
+          // Recargar el carrito para obtener totales actualizados
+          const refreshedCart = await getCart();
+          if (refreshedCart) {
+            setCart(refreshedCart);
+            // Cargar payment sessions después de seleccionar shipping
+            loadPaymentSessions(refreshedCart.id);
+          }
+        }
+      } else {
+        // Si hay múltiples opciones, cargar payment sessions cuando se seleccione una
+        // Esto se maneja en el useEffect de watchedShippingOption
       }
     } catch (error) {
       showError("Error al cargar opciones de envío");
     } finally {
       setLoadingShipping(false);
+    }
+  };
+
+  const loadPaymentSessions = async (cartId: string) => {
+    setLoadingPaymentSessions(true);
+    try {
+      // Primero inicializar payment sessions si no están inicializadas
+      const initResult = await initPaymentSessions(cartId);
+      if (initResult.error) {
+        showError(initResult.error.message || "Error al inicializar métodos de pago");
+        return;
+      }
+
+      // Luego obtener las payment sessions del cart
+      const sessionsResult = await getCartPaymentSessions(cartId);
+      if (sessionsResult.error) {
+        showError(sessionsResult.error.message || "Error al cargar métodos de pago");
+        return;
+      }
+
+      setPaymentSessions(sessionsResult.payment_sessions);
+
+      // Si solo hay una opción, seleccionarla automáticamente
+      if (sessionsResult.payment_sessions.length === 1) {
+        setValue("payment_provider_id", sessionsResult.payment_sessions[0].provider_id);
+        setSelectedPaymentProvider(sessionsResult.payment_sessions[0].provider_id);
+        await setPaymentSession(cartId, sessionsResult.payment_sessions[0].provider_id);
+      }
+    } catch (error) {
+      showError("Error al cargar métodos de pago");
+    } finally {
+      setLoadingPaymentSessions(false);
     }
   };
 
@@ -182,39 +301,134 @@ export default function CheckoutPage() {
         return;
       }
 
+      // Recargar carrito después de actualizar dirección
+      const cartAfterAddress = await getCart();
+      if (cartAfterAddress) {
+        setCart(cartAfterAddress);
+      }
+
       // 2. Establecer opción de envío
-      const shippingResult = await setShippingOption(cart.id, data.shipping_option_id);
+      const shippingResult = await setShippingOption(cartAfterAddress?.id || cart.id, data.shipping_option_id);
       if (!shippingResult.success) {
         showError(shippingResult.error?.message || "Error al seleccionar el método de envío");
         setIsSubmitting(false);
         return;
       }
 
-      // 3. Establecer sesión de pago
-      const paymentResult = await setPaymentSession(cart.id, "manual");
+      // Recargar carrito después de actualizar shipping
+      const cartAfterShipping = await getCart();
+      if (!cartAfterShipping) {
+        showError("No se pudo actualizar el carrito después de seleccionar el envío");
+        setIsSubmitting(false);
+        return;
+      }
+      setCart(cartAfterShipping);
+
+      // 3. Asegurar que payment sessions están inicializadas
+      if (paymentSessions.length === 0) {
+        const initResult = await initPaymentSessions(cartAfterShipping.id);
+        if (initResult.error) {
+          showError(initResult.error.message || "Error al inicializar métodos de pago");
+          setIsSubmitting(false);
+          return;
+        }
+        
+        // Obtener payment sessions del cart
+        const sessionsResult = await getCartPaymentSessions(cartAfterShipping.id);
+        if (sessionsResult.error) {
+          showError(sessionsResult.error.message || "Error al cargar métodos de pago");
+          setIsSubmitting(false);
+          return;
+        }
+        
+        if (sessionsResult.payment_sessions.length === 0) {
+          showError("No hay métodos de pago disponibles. Por favor, verifica tu configuración.");
+          setIsSubmitting(false);
+          return;
+        }
+        
+        setPaymentSessions(sessionsResult.payment_sessions);
+        
+        // Si no hay provider seleccionado, seleccionar el primero
+        if (!selectedPaymentProvider && sessionsResult.payment_sessions.length > 0) {
+          const firstProvider = sessionsResult.payment_sessions[0].provider_id;
+          setValue("payment_provider_id", firstProvider);
+          setSelectedPaymentProvider(firstProvider);
+        }
+      }
+
+      // 4. Establecer sesión de pago seleccionada
+      const selectedProvider = data.payment_provider_id || selectedPaymentProvider;
+      if (!selectedProvider) {
+        showError("Debes seleccionar un método de pago");
+        setIsSubmitting(false);
+        return;
+      }
+
+      // Validar que el provider seleccionado existe en las payment sessions
+      const providerExists = paymentSessions.some(
+        (ps) => ps.provider_id === selectedProvider
+      );
+      if (!providerExists) {
+        showError("El método de pago seleccionado no está disponible");
+        setIsSubmitting(false);
+        return;
+      }
+
+      const paymentResult = await setPaymentSession(cartAfterShipping.id, selectedProvider);
       if (!paymentResult.success) {
         showError(paymentResult.error?.message || "Error al configurar el pago");
         setIsSubmitting(false);
         return;
       }
 
-      // 4. Completar checkout
-      const checkoutResult = await completeCheckout(cart.id);
+      // Recargar carrito después de actualizar payment
+      const cartAfterPayment = await getCart();
+      if (!cartAfterPayment) {
+        showError("No se pudo actualizar el carrito después de configurar el pago");
+        setIsSubmitting(false);
+        return;
+      }
+      setCart(cartAfterPayment);
+
+      // 5. Completar checkout (puede requerir redirect para Stripe)
+      const checkoutResult = await completeCheckout(cartAfterPayment.id);
+      
+      // Si requiere redirect (Stripe)
+      if (checkoutResult.requiresPayment && checkoutResult.redirectUrl) {
+        // Guardar cart_id en sessionStorage para el callback
+        if (typeof window !== "undefined") {
+          sessionStorage.setItem("stripe_cart_id", cartAfterPayment.id);
+        }
+        
+        // Redirigir a Stripe
+        window.location.href = checkoutResult.redirectUrl;
+        return; // No hacer setIsSubmitting(false) porque estamos redirigiendo
+      }
+      
+      // Si hay error
+      if (checkoutResult.error) {
+        showError(checkoutResult.error.message || "Error al completar el pedido");
+        setIsSubmitting(false);
+        return;
+      }
+      
+      // Si no hay orden, es un error
       if (!checkoutResult.order) {
-        showError(checkoutResult.error?.message || "Error al completar el pedido");
+        showError("Error al completar el pedido. Por favor, intenta nuevamente.");
         setIsSubmitting(false);
         return;
       }
 
-      // 5. Limpiar carrito del localStorage
+      // 6. Limpiar carrito del localStorage
       if (typeof window !== "undefined") {
         localStorage.removeItem("medusa_cart_id");
       }
 
-      // 6. Disparar evento de actualización
+      // 7. Disparar evento de actualización
       window.dispatchEvent(new CustomEvent("cart-updated"));
 
-      // 7. Redirigir a confirmación
+      // 8. Redirigir a confirmación
       showSuccess("¡Pedido completado con éxito!");
       router.push(`/checkout/confirmacion?order_id=${checkoutResult.order.id}`);
     } catch (error: any) {
@@ -274,6 +488,16 @@ export default function CheckoutPage() {
                 isLoading={loadingShipping}
               />
             </div>
+
+            <div className="bg-white rounded-lg border border-gray-200 p-6">
+              <PaymentMethodSelector
+                paymentSessions={paymentSessions}
+                register={register}
+                errors={errors}
+                selectedProviderId={selectedPaymentProvider || undefined}
+                isLoading={loadingPaymentSessions}
+              />
+            </div>
           </div>
 
           {/* Resumen sticky */}
@@ -286,9 +510,19 @@ export default function CheckoutPage() {
         <div className="mt-8 flex justify-end">
           <button
             type="submit"
-            disabled={isSubmitting || !selectedShippingId || !cart}
+            disabled={
+              isSubmitting || 
+              !selectedShippingId || 
+              !selectedPaymentProvider || 
+              !cart ||
+              paymentSessions.length === 0
+            }
             className={`px-8 py-3 rounded-lg font-semibold text-white transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 ${
-              isSubmitting || !selectedShippingId || !cart
+              isSubmitting || 
+              !selectedShippingId || 
+              !selectedPaymentProvider || 
+              !cart ||
+              paymentSessions.length === 0
                 ? "bg-gray-400 cursor-not-allowed"
                 : "bg-primary-600 hover:bg-primary-700"
             }`}

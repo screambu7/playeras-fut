@@ -12,7 +12,7 @@ import {
   buildSearchParamsFromFilters,
   FilterSearchParams,
 } from "@/lib/filters";
-import { Liga, Talla, CatalogFilters } from "@/types";
+import { Liga, Talla, Genero, Version, CatalogFilters } from "@/types";
 
 /**
  * Hook para gestionar filtros del catálogo sincronizados con la URL
@@ -29,9 +29,9 @@ export function useCatalogFilters() {
     // Convertir URLSearchParams a objeto
     // Next.js agrupa múltiples valores del mismo parámetro automáticamente
     searchParams.forEach((value, key) => {
-      if (key === "liga" || key === "equipo" || key === "talla") {
+      if (key === "liga" || key === "equipo" || key === "talla" || key === "genero" || key === "version") {
         // Parámetros que pueden ser arrays
-        const paramKey = key as "liga" | "equipo" | "talla";
+        const paramKey = key as "liga" | "equipo" | "talla" | "genero" | "version";
         const existing = params[paramKey];
         if (existing) {
           // Si ya existe, convertir a array si no lo es
@@ -135,6 +135,42 @@ export function useCatalogFilters() {
   );
 
   /**
+   * Toggle de género (checkbox)
+   */
+  const toggleGenero = useCallback(
+    (genero: Genero) => {
+      updateFilters((prev) => {
+        const newFilters = { ...prev, generos: new Set(prev.generos) };
+        if (newFilters.generos.has(genero)) {
+          newFilters.generos.delete(genero);
+        } else {
+          newFilters.generos.add(genero);
+        }
+        return newFilters;
+      });
+    },
+    [updateFilters]
+  );
+
+  /**
+   * Toggle de versión (checkbox)
+   */
+  const toggleVersion = useCallback(
+    (version: Version) => {
+      updateFilters((prev) => {
+        const newFilters = { ...prev, versions: new Set(prev.versions) };
+        if (newFilters.versions.has(version)) {
+          newFilters.versions.delete(version);
+        } else {
+          newFilters.versions.add(version);
+        }
+        return newFilters;
+      });
+    },
+    [updateFilters]
+  );
+
+  /**
    * Actualiza rango de precios
    */
   const updatePriceRange = useCallback(
@@ -160,6 +196,8 @@ export function useCatalogFilters() {
     toggleLeague,
     toggleTeam,
     toggleSize,
+    toggleGenero,
+    toggleVersion,
     updatePriceRange,
     clearFilters,
   };

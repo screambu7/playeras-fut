@@ -16,8 +16,18 @@ interface OrderSummaryProps {
 export default function OrderSummary({ cart, selectedShipping }: OrderSummaryProps) {
   // Medusa devuelve precios en centavos
   const subtotal = (cart.subtotal || 0) / 100;
-  const shippingTotal = selectedShipping ? selectedShipping.amount / 100 : 0;
-  const total = ((cart.total || 0) / 100) + shippingTotal;
+  
+  // Usar shipping_total del cart si está disponible (más preciso)
+  // Si no, usar el selectedShipping como fallback
+  const shippingTotal = cart.shipping_total 
+    ? cart.shipping_total / 100 
+    : (selectedShipping ? selectedShipping.amount / 100 : 0);
+  
+  // Usar tax_total del cart si está disponible
+  const taxTotal = cart.tax_total ? cart.tax_total / 100 : 0;
+  
+  // Usar total del cart directamente (ya incluye shipping y taxes)
+  const total = (cart.total || 0) / 100;
 
   return (
     <div className="bg-white rounded-lg border border-gray-200 p-6 sticky top-24">
@@ -75,11 +85,17 @@ export default function OrderSummary({ cart, selectedShipping }: OrderSummaryPro
         <div className="flex justify-between text-sm text-gray-600">
           <span>Envío</span>
           <span>
-            {selectedShipping
+            {shippingTotal > 0
               ? `€${shippingTotal.toFixed(2)}`
               : "Selecciona envío"}
           </span>
         </div>
+        {taxTotal > 0 && (
+          <div className="flex justify-between text-sm text-gray-600">
+            <span>Impuestos</span>
+            <span>€{taxTotal.toFixed(2)}</span>
+          </div>
+        )}
         <div className="border-t border-gray-200 pt-2">
           <div className="flex justify-between text-lg font-bold text-gray-900">
             <span>Total</span>

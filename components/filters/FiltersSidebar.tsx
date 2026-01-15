@@ -5,7 +5,7 @@
 
 "use client";
 
-import { Liga, Talla, CatalogFilters } from "@/types";
+import { Liga, Talla, Genero, Version, CatalogFilters } from "@/types";
 import FilterGroup, { FilterCheckbox } from "./FilterGroup";
 import PriceRange from "./PriceRange";
 import ClearFiltersButton from "./ClearFiltersButton";
@@ -16,14 +16,20 @@ interface FiltersSidebarProps {
   leagues: Liga[];
   teams: string[];
   sizes: Talla[];
+  generos: Genero[];
+  versions: Version[];
   onToggleLeague: (league: Liga) => void;
   onToggleTeam: (team: string) => void;
   onToggleSize: (size: Talla) => void;
+  onToggleGenero: (genero: Genero) => void;
+  onToggleVersion: (version: Version) => void;
   onPriceChange: (min: number | null, max: number | null) => void;
   onClearFilters: () => void;
   getLeagueCount?: (league: Liga) => number;
   getTeamCount?: (team: string) => number;
   getSizeCount?: (size: Talla) => number;
+  getGeneroCount?: (genero: Genero) => number;
+  getVersionCount?: (version: Version) => number;
 }
 
 export default function FiltersSidebar({
@@ -31,14 +37,20 @@ export default function FiltersSidebar({
   leagues,
   teams,
   sizes,
+  generos,
+  versions,
   onToggleLeague,
   onToggleTeam,
   onToggleSize,
+  onToggleGenero,
+  onToggleVersion,
   onPriceChange,
   onClearFilters,
   getLeagueCount,
   getTeamCount,
   getSizeCount,
+  getGeneroCount,
+  getVersionCount,
 }: FiltersSidebarProps) {
   return (
     <aside className="lg:w-64">
@@ -95,6 +107,38 @@ export default function FiltersSidebar({
                   checked={filters.sizes.has(size)}
                   onChange={() => onToggleSize(size)}
                   count={getSizeCount?.(size)}
+                />
+              ))}
+            </FilterGroup>
+          )}
+
+          {/* Filtro de Género */}
+          {generos.length > 0 && (
+            <FilterGroup title="Género">
+              {generos.map((genero) => (
+                <FilterCheckbox
+                  key={genero}
+                  id={`filter-genero-${genero}`}
+                  label={genero}
+                  checked={filters.generos.has(genero)}
+                  onChange={() => onToggleGenero(genero)}
+                  count={getGeneroCount?.(genero)}
+                />
+              ))}
+            </FilterGroup>
+          )}
+
+          {/* Filtro de Versión */}
+          {versions.length > 0 && (
+            <FilterGroup title="Versión">
+              {versions.map((version) => (
+                <FilterCheckbox
+                  key={version}
+                  id={`filter-version-${version}`}
+                  label={version}
+                  checked={filters.versions.has(version)}
+                  onChange={() => onToggleVersion(version)}
+                  count={getVersionCount?.(version)}
                 />
               ))}
             </FilterGroup>

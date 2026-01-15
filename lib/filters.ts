@@ -3,7 +3,7 @@
  * Preparado para migración futura a backend filtering
  */
 
-import { Liga, Talla, MedusaProductAdapted, CatalogFilters } from "@/types";
+import { Liga, Talla, Genero, Version, MedusaProductAdapted, CatalogFilters } from "@/types";
 
 /**
  * Parámetros de URL para filtros
@@ -12,6 +12,8 @@ export type FilterSearchParams = {
   liga?: string | string[];
   equipo?: string | string[];
   talla?: string | string[];
+  genero?: string | string[];
+  version?: string | string[];
   precio_min?: string;
   precio_max?: string;
 };
@@ -26,6 +28,8 @@ export function parseFiltersFromSearchParams(
     leagues: new Set<Liga>(),
     teams: new Set<string>(),
     sizes: new Set<Talla>(),
+    generos: new Set<Genero>(),
+    versions: new Set<Version>(),
     minPrice: null,
     maxPrice: null,
   };
@@ -64,6 +68,32 @@ export function parseFiltersFromSearchParams(
       const validTalla = talla as Talla;
       if (validTalla) {
         filters.sizes.add(validTalla);
+      }
+    });
+  }
+
+  // Parsear géneros (puede ser string o array)
+  if (searchParams.genero) {
+    const generos = Array.isArray(searchParams.genero)
+      ? searchParams.genero
+      : [searchParams.genero];
+    generos.forEach((genero) => {
+      const validGenero = genero as Genero;
+      if (validGenero) {
+        filters.generos.add(validGenero);
+      }
+    });
+  }
+
+  // Parsear versiones (puede ser string o array)
+  if (searchParams.version) {
+    const versions = Array.isArray(searchParams.version)
+      ? searchParams.version
+      : [searchParams.version];
+    versions.forEach((version) => {
+      const validVersion = version as Version;
+      if (validVersion) {
+        filters.versions.add(validVersion);
       }
     });
   }
@@ -121,6 +151,22 @@ export function applyFiltersToProducts(
     });
   }
 
+  // Filtrar por géneros
+  if (filters.generos.size > 0) {
+    filtered = filtered.filter((product) => {
+      const productGenero = product.metadata.genero as Genero | undefined;
+      return productGenero && filters.generos.has(productGenero);
+    });
+  }
+
+  // Filtrar por versiones
+  if (filters.versions.size > 0) {
+    filtered = filtered.filter((product) => {
+      const productVersion = product.metadata.version as Version | undefined;
+      return productVersion && filters.versions.has(productVersion);
+    });
+  }
+
   // Filtrar por precio mínimo
   if (filters.minPrice !== null) {
     filtered = filtered.filter((product) => product.price >= filters.minPrice!);
@@ -154,6 +200,14 @@ export function buildSearchParamsFromFilters(
     params.talla = Array.from(filters.sizes);
   }
 
+  if (filters.generos.size > 0) {
+    params.genero = Array.from(filters.generos);
+  }
+
+  if (filters.versions.size > 0) {
+    params.version = Array.from(filters.versions);
+  }
+
   if (filters.minPrice !== null) {
     params.precio_min = filters.minPrice.toString();
   }
@@ -173,6 +227,8 @@ export function hasActiveFilters(filters: CatalogFilters): boolean {
     filters.leagues.size > 0 ||
     filters.teams.size > 0 ||
     filters.sizes.size > 0 ||
+    filters.generos.size > 0 ||
+    filters.versions.size > 0 ||
     filters.minPrice !== null ||
     filters.maxPrice !== null
   );

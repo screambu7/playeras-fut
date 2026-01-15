@@ -2,6 +2,10 @@ export type Liga = "La Liga" | "Premier League" | "Serie A" | "Bundesliga" | "Li
 
 export type Talla = "XS" | "S" | "M" | "L" | "XL" | "XXL";
 
+export type Genero = "Hombre" | "Mujer" | "Niño";
+
+export type Version = "Player" | "Fan";
+
 // Re-exportar tipos de Medusa
 export type { MedusaProductAdapted, MedusaProductVariant, MedusaCart, MedusaCartItem } from "./medusa";
 
@@ -43,6 +47,8 @@ export type FilterOption = {
   leagues?: Liga[];
   teams?: string[];
   sizes?: Talla[];
+  generos?: Genero[];
+  versions?: Version[];
   minPrice?: number;
   maxPrice?: number;
 };
@@ -54,6 +60,8 @@ export type CatalogFilters = {
   leagues: Set<Liga>;
   teams: Set<string>;
   sizes: Set<Talla>;
+  generos: Set<Genero>;
+  versions: Set<Version>;
   minPrice: number | null;
   maxPrice: number | null;
 };

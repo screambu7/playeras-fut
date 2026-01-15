@@ -21,6 +21,9 @@ export const checkoutSchema = z.object({
 
   // Opción de envío
   shipping_option_id: z.string().min(1, "Debes seleccionar una opción de envío"),
+
+  // Método de pago
+  payment_provider_id: z.string().min(1, "Debes seleccionar un método de pago"),
 });
 
 export type CheckoutFormData = z.infer<typeof checkoutSchema>;

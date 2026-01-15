@@ -275,3 +275,84 @@ export async function listProductsByCollection(
     throw createApiError(error);
   }
 }
+
+/**
+ * Tipos para regiones de Medusa
+ */
+export interface MedusaRegion {
+  id: string;
+  name: string;
+  currency_code: string;
+  countries: Array<{
+    id: string;
+    iso_2: string;
+    iso_3: string;
+    name: string;
+  }>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MedusaRegionsResponse {
+  regions: MedusaRegion[];
+}
+
+/**
+ * Lista todas las regiones disponibles
+ */
+export async function listRegions(options?: {
+  revalidate?: number | false;
+}): Promise<MedusaRegion[]> {
+  try {
+    const response = await medusaFetch<MedusaRegionsResponse>(
+      `/regions`,
+      { revalidate: options?.revalidate }
+    );
+
+    return response.regions || [];
+  } catch (error) {
+    console.error("[Medusa Store API] Error listing regions:", error);
+    throw createApiError(error);
+  }
+}
+
+/**
+ * Tipos para payment sessions de Medusa
+ */
+export interface MedusaPaymentSession {
+  id: string;
+  provider_id: string;
+  status: string;
+  data?: Record<string, unknown>;
+  amount?: number;
+  currency_code?: string;
+}
+
+export interface MedusaPaymentSessionsResponse {
+  payment_sessions: MedusaPaymentSession[];
+}
+
+/**
+ * Inicializa las payment sessions disponibles para un carrito
+ * Esto debe llamarse antes de setPaymentSession
+ */
+export async function initializePaymentSessions(
+  cartId: string
+): Promise<{ payment_sessions: MedusaPaymentSession[]; error?: ApiError }> {
+  try {
+    const response = await medusaFetch<MedusaPaymentSessionsResponse>(
+      `/payment-sessions`,
+      {
+        method: "POST",
+        body: JSON.stringify({ cart_id: cartId }),
+      }
+    );
+
+    return { payment_sessions: response.payment_sessions || [] };
+  } catch (error: any) {
+    return {
+      payment_sessions: [],
+      error: createApiError(error),
+    };
+  }
+}

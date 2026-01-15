@@ -3,12 +3,12 @@
 import { useState, useMemo, Suspense, useEffect } from "react";
 import { useCatalogFilters } from "@/hooks/useCatalogFilters";
 import { applyFiltersToProducts, getAllSizesFromProducts } from "@/lib/filters";
-import { getAllProducts, getAllLeagues, getAllTeams, getAllSizes } from "@/lib/products";
+import { getAllProducts, getAllLeagues, getAllTeams, getAllSizes, getAllGeneros, getAllVersions } from "@/lib/products";
 import ProductGrid from "@/components/ProductGrid";
 import FiltersSidebar from "@/components/filters/FiltersSidebar";
 import FiltersDrawer from "@/components/filters/FiltersDrawer";
 import ActiveFiltersChips from "@/components/filters/ActiveFiltersChips";
-import { SortOption, MedusaProductAdapted, Liga, Talla } from "@/types";
+import { SortOption, MedusaProductAdapted, Liga, Talla, Genero, Version } from "@/types";
 
 function CatalogoContent() {
   const {
@@ -16,6 +16,8 @@ function CatalogoContent() {
     toggleLeague,
     toggleTeam,
     toggleSize,
+    toggleGenero,
+    toggleVersion,
     updatePriceRange,
     clearFilters,
   } = useCatalogFilters();
@@ -25,6 +27,8 @@ function CatalogoContent() {
   const [leagues, setLeagues] = useState<string[]>([]);
   const [teams, setTeams] = useState<string[]>([]);
   const [sizes, setSizes] = useState<string[]>([]);
+  const [generos, setGeneros] = useState<Genero[]>([]);
+  const [versions, setVersions] = useState<Version[]>([]);
   const [loading, setLoading] = useState(true);
   const [sortBy, setSortBy] = useState<SortOption>("popular");
 
@@ -33,17 +37,21 @@ function CatalogoContent() {
     async function loadData() {
       setLoading(true);
       try {
-        const [allProducts, allLeagues, allTeams, allSizes] = await Promise.all([
+        const [allProducts, allLeagues, allTeams, allSizes, allGeneros, allVersions] = await Promise.all([
           getAllProducts(),
           getAllLeagues(),
           getAllTeams(),
           getAllSizes(),
+          getAllGeneros(),
+          getAllVersions(),
         ]);
 
         setProducts(allProducts);
         setLeagues(allLeagues);
         setTeams(allTeams);
         setSizes(allSizes);
+        setGeneros(allGeneros);
+        setVersions(allVersions);
       } catch (error) {
         // Error loading products - handled by empty state
       } finally {
@@ -103,6 +111,14 @@ function CatalogoContent() {
     ).length;
   };
 
+  const getGeneroCount = (genero: Genero) => {
+    return products.filter((p) => p.metadata.genero === genero).length;
+  };
+
+  const getVersionCount = (version: Version) => {
+    return products.filter((p) => p.metadata.version === version).length;
+  };
+
   // Handlers para eliminar filtros individuales desde chips
   const handleRemoveLeague = (league: string) => {
     toggleLeague(league as Liga);
@@ -114,6 +130,14 @@ function CatalogoContent() {
 
   const handleRemoveSize = (size: string) => {
     toggleSize(size as Talla);
+  };
+
+  const handleRemoveGenero = (genero: Genero) => {
+    toggleGenero(genero);
+  };
+
+  const handleRemoveVersion = (version: Version) => {
+    toggleVersion(version);
   };
 
   const handleRemovePrice = () => {
@@ -154,14 +178,20 @@ function CatalogoContent() {
             leagues={leagues as Liga[]}
             teams={teams}
             sizes={sizes as Talla[]}
+            generos={generos}
+            versions={versions}
             onToggleLeague={toggleLeague}
             onToggleTeam={toggleTeam}
             onToggleSize={toggleSize}
+            onToggleGenero={toggleGenero}
+            onToggleVersion={toggleVersion}
             onPriceChange={updatePriceRange}
             onClearFilters={clearFilters}
             getLeagueCount={getLeagueCount}
             getTeamCount={getTeamCount}
             getSizeCount={getSizeCount}
+            getGeneroCount={getGeneroCount}
+            getVersionCount={getVersionCount}
           />
         </div>
 
@@ -213,6 +243,8 @@ function CatalogoContent() {
             onRemoveLeague={handleRemoveLeague}
             onRemoveTeam={handleRemoveTeam}
             onRemoveSize={handleRemoveSize}
+            onRemoveGenero={handleRemoveGenero}
+            onRemoveVersion={handleRemoveVersion}
             onRemovePrice={handleRemovePrice}
             onClearAll={clearFilters}
           />
@@ -227,17 +259,23 @@ function CatalogoContent() {
         isOpen={showFiltersDrawer}
         onClose={() => setShowFiltersDrawer(false)}
         filters={filters}
-        leagues={leagues as any[]}
+        leagues={leagues as Liga[]}
         teams={teams}
-        sizes={sizes as any[]}
+        sizes={sizes as Talla[]}
+        generos={generos}
+        versions={versions}
         onToggleLeague={toggleLeague}
         onToggleTeam={toggleTeam}
         onToggleSize={toggleSize}
+        onToggleGenero={toggleGenero}
+        onToggleVersion={toggleVersion}
         onPriceChange={updatePriceRange}
         onClearFilters={clearFilters}
         getLeagueCount={getLeagueCount}
         getTeamCount={getTeamCount}
         getSizeCount={getSizeCount}
+        getGeneroCount={getGeneroCount}
+        getVersionCount={getVersionCount}
       />
     </div>
   );

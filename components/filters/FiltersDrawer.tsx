@@ -6,7 +6,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Liga, Talla, CatalogFilters } from "@/types";
+import { Liga, Talla, Genero, Version, CatalogFilters } from "@/types";
 import FilterGroup, { FilterCheckbox } from "./FilterGroup";
 import PriceRange from "./PriceRange";
 import ClearFiltersButton from "./ClearFiltersButton";
@@ -19,14 +19,20 @@ interface FiltersDrawerProps {
   leagues: Liga[];
   teams: string[];
   sizes: Talla[];
+  generos: Genero[];
+  versions: Version[];
   onToggleLeague: (league: Liga) => void;
   onToggleTeam: (team: string) => void;
   onToggleSize: (size: Talla) => void;
+  onToggleGenero: (genero: Genero) => void;
+  onToggleVersion: (version: Version) => void;
   onPriceChange: (min: number | null, max: number | null) => void;
   onClearFilters: () => void;
   getLeagueCount?: (league: Liga) => number;
   getTeamCount?: (team: string) => number;
   getSizeCount?: (size: Talla) => number;
+  getGeneroCount?: (genero: Genero) => number;
+  getVersionCount?: (version: Version) => number;
 }
 
 export default function FiltersDrawer({
@@ -36,14 +42,20 @@ export default function FiltersDrawer({
   leagues,
   teams,
   sizes,
+  generos,
+  versions,
   onToggleLeague,
   onToggleTeam,
   onToggleSize,
+  onToggleGenero,
+  onToggleVersion,
   onPriceChange,
   onClearFilters,
   getLeagueCount,
   getTeamCount,
   getSizeCount,
+  getGeneroCount,
+  getVersionCount,
 }: FiltersDrawerProps) {
   // Prevenir scroll del body cuando el drawer está abierto
   useEffect(() => {
@@ -147,6 +159,38 @@ export default function FiltersDrawer({
                       checked={filters.sizes.has(size)}
                       onChange={() => onToggleSize(size)}
                       count={getSizeCount?.(size)}
+                    />
+                  ))}
+                </FilterGroup>
+              )}
+
+              {/* Filtro de Género */}
+              {generos.length > 0 && (
+                <FilterGroup title="Género">
+                  {generos.map((genero) => (
+                    <FilterCheckbox
+                      key={genero}
+                      id={`drawer-filter-genero-${genero}`}
+                      label={genero}
+                      checked={filters.generos.has(genero)}
+                      onChange={() => onToggleGenero(genero)}
+                      count={getGeneroCount?.(genero)}
+                    />
+                  ))}
+                </FilterGroup>
+              )}
+
+              {/* Filtro de Versión */}
+              {versions.length > 0 && (
+                <FilterGroup title="Versión">
+                  {versions.map((version) => (
+                    <FilterCheckbox
+                      key={version}
+                      id={`drawer-filter-version-${version}`}
+                      label={version}
+                      checked={filters.versions.has(version)}
+                      onChange={() => onToggleVersion(version)}
+                      count={getVersionCount?.(version)}
                     />
                   ))}
                 </FilterGroup>

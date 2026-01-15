@@ -5,13 +5,15 @@
 
 "use client";
 
-import { Liga, Talla, CatalogFilters } from "@/types";
+import { Liga, Talla, Genero, Version, CatalogFilters } from "@/types";
 
 interface ActiveFiltersChipsProps {
   filters: CatalogFilters;
   onRemoveLeague: (league: Liga) => void;
   onRemoveTeam: (team: string) => void;
   onRemoveSize: (size: Talla) => void;
+  onRemoveGenero: (genero: Genero) => void;
+  onRemoveVersion: (version: Version) => void;
   onRemovePrice: () => void;
   onClearAll: () => void;
 }
@@ -21,6 +23,8 @@ export default function ActiveFiltersChips({
   onRemoveLeague,
   onRemoveTeam,
   onRemoveSize,
+  onRemoveGenero,
+  onRemoveVersion,
   onRemovePrice,
   onClearAll,
 }: ActiveFiltersChipsProps) {
@@ -28,6 +32,8 @@ export default function ActiveFiltersChips({
     filters.leagues.size > 0 ||
     filters.teams.size > 0 ||
     filters.sizes.size > 0 ||
+    filters.generos.size > 0 ||
+    filters.versions.size > 0 ||
     filters.minPrice !== null ||
     filters.maxPrice !== null;
 
@@ -78,6 +84,36 @@ export default function ActiveFiltersChips({
           aria-label={`Eliminar filtro de talla: ${size}`}
         >
           {size}
+          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      ))}
+
+      {/* Géneros */}
+      {Array.from(filters.generos).map((genero) => (
+        <button
+          key={genero}
+          onClick={() => onRemoveGenero(genero)}
+          className="inline-flex items-center gap-1 px-3 py-1 bg-primary-100 text-primary-700 rounded-full text-sm hover:bg-primary-200 transition-colors"
+          aria-label={`Eliminar filtro de género: ${genero}`}
+        >
+          {genero}
+          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      ))}
+
+      {/* Versiones */}
+      {Array.from(filters.versions).map((version) => (
+        <button
+          key={version}
+          onClick={() => onRemoveVersion(version)}
+          className="inline-flex items-center gap-1 px-3 py-1 bg-primary-100 text-primary-700 rounded-full text-sm hover:bg-primary-200 transition-colors"
+          aria-label={`Eliminar filtro de versión: ${version}`}
+        >
+          {version}
           <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
           </svg>

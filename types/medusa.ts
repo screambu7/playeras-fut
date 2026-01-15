@@ -33,6 +33,8 @@ export interface MedusaProductAdapted {
     team?: string;
     league?: Liga;
     season?: string;
+    genero?: import("./index").Genero;
+    version?: import("./index").Version;
     featured?: boolean;
     bestSeller?: boolean;
   };
@@ -75,6 +77,8 @@ export function adaptMedusaProduct(medusaProduct: MedusaProduct): MedusaProductA
     team: medusaProduct.metadata?.team,
     league: medusaProduct.metadata?.league as Liga | undefined,
     season: medusaProduct.metadata?.season,
+    genero: medusaProduct.metadata?.genero as import("./index").Genero | undefined,
+    version: medusaProduct.metadata?.version as import("./index").Version | undefined,
     featured: medusaProduct.metadata?.featured === "true",
     bestSeller: medusaProduct.metadata?.bestSeller === "true",
   };
@@ -190,8 +194,36 @@ export interface MedusaCart {
   items: MedusaCartItem[];
   subtotal: number;
   total: number;
+  shipping_total?: number;
+  tax_total?: number;
   currency_code?: string;
   region?: {
+    id: string;
+    name: string;
     currency_code: string;
   };
+  email?: string;
+  shipping_address?: {
+    first_name: string | null;
+    last_name: string | null;
+    address_1: string | null;
+    address_2?: string | null;
+    city: string | null;
+    country_code: string | null;
+    postal_code: string | null;
+    province?: string | null;
+    phone?: string | null;
+  } | null;
+  payment_sessions?: Array<{
+    id: string;
+    provider_id: string;
+    status: string;
+    data?: Record<string, unknown>;
+  }>;
+  payment_session?: {
+    id: string;
+    provider_id: string;
+    status: string;
+    data?: Record<string, unknown>;
+  } | null;
 }
