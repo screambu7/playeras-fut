@@ -224,10 +224,15 @@ export interface CompleteCheckoutResult {
  */
 export async function completeCheckout(cartId: string): Promise<CompleteCheckoutResult> {
   try {
-    const { type, data } = await medusa.carts.complete(cartId);
+    const result = await medusa.carts.complete(cartId);
+    const type = result.type as string;
+    const data = result.data as any;
     
     // Si requiere autorización de pago (como Stripe redirect)
-    if (type === "payment_authorization_required") {
+    // Nota: En Medusa v2, cuando hay un redirect de pago, el tipo puede ser diferente
+    // Verificamos tanto el tipo como los datos para detectar redirects
+    if (type === "payment_authorization_required" || 
+        (data && (data.redirect_url || data.url))) {
       const paymentData = data as any;
       const redirectUrl = paymentData?.redirect_url || paymentData?.url;
       
@@ -253,7 +258,7 @@ export async function completeCheckout(cartId: string): Promise<CompleteCheckout
     
     // Si el tipo no es "order", es un error
     if (type !== "order") {
-      const errorMessage = (data as any)?.message || "Error al completar el checkout";
+      const errorMessage = data?.message || "Error al completar el checkout";
       const error = new Error(errorMessage);
       return { 
         order: null, 
@@ -357,4 +362,106 @@ export async function getOrder(orderId: string): Promise<{ order: Order | null; 
   } catch (error) {
     return { order: null, error: createApiError(error) };
   }
+}
+
+/**
+ * Buscar una orden por cart_id
+ * Útil después de un redirect de Stripe para verificar si el webhook ya creó la orden
+ * 
+ * Estrategia:
+ * 1. Intentar completar el checkout - si ya está completado, puede retornar la orden
+ * 2. Si el cart tiene metadata con order_id, usarlo
+ * 3. Si no, retornar null (la orden aún no existe)
+ */
+export async function findOrderByCartId(cartId: string): Promise<{ order: Order | null; error?: ApiError }> {
+  try {
+    // Estrategia 1: Intentar obtener el cart y verificar si tiene metadata con order_id
+    try {
+      const { cart } = await medusa.carts.retrieve(cartId);
+      
+      // Si el cart tiene metadata con order_id, usarlo
+      if (cart.metadata && typeof cart.metadata === 'object' && 'order_id' in cart.metadata) {
+        const orderId = cart.metadata.order_id as string;
+        return await getOrder(orderId);
+      }
+    } catch (cartError: any) {
+      // Si el cart no existe (404), puede que ya fue convertido en orden
+      // Continuar con la siguiente estrategia
+      if (cartError.status !== 404) {
+        // Si es otro error, retornarlo
+        return { order: null, error: createApiError(cartError) };
+      }
+    }
+
+    // Estrategia 2: Intentar completar el checkout
+    // Si el cart ya fue completado, Medusa puede retornar la orden o un error específico
+    const checkoutResult = await completeCheckout(cartId);
+    
+    // Si hay una orden en el resultado, retornarla
+    if (checkoutResult.order) {
+      return { order: checkoutResult.order };
+    }
+    
+    // Si hay un error que indica que el cart ya fue completado, buscar la orden
+    if (checkoutResult.error) {
+      const errorMsg = checkoutResult.error.message?.toLowerCase() || "";
+      
+      // Si el error indica que ya está completado, puede que la orden exista
+      // pero no la podemos encontrar directamente
+      if (errorMsg.includes("already") || errorMsg.includes("completed") || errorMsg.includes("not found")) {
+        // Retornar null - la orden puede existir pero no la podemos encontrar por cart_id
+        // El polling en checkCartOrderStatus manejará esto
+        return { order: null };
+      }
+      
+      // Otros errores pueden ser temporales
+      return { order: null, error: checkoutResult.error };
+    }
+    
+    // Si no hay orden ni error claro, retornar null
+    return { order: null };
+  } catch (error: any) {
+    // Si es un error 404 del cart, puede que ya fue convertido en orden
+    if (error.status === 404) {
+      return { order: null };
+    }
+    return { order: null, error: createApiError(error) };
+  }
+}
+
+/**
+ * Verificar el estado del cart después de un redirect de pago
+ * Retorna la orden si ya existe, o null si aún no se ha creado
+ */
+export async function checkCartOrderStatus(
+  cartId: string,
+  maxRetries: number = 5,
+  retryDelay: number = 2000
+): Promise<{ order: Order | null; error?: ApiError }> {
+  // Intentar encontrar la orden inmediatamente
+  let result = await findOrderByCartId(cartId);
+  
+  // Si encontramos la orden, retornarla
+  if (result.order) {
+    return result;
+  }
+  
+  // Si no, hacer polling con retries
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    await new Promise((resolve) => setTimeout(resolve, retryDelay));
+    
+    result = await findOrderByCartId(cartId);
+    
+    if (result.order) {
+      return result;
+    }
+    
+    // Si hay un error crítico (no 404), retornarlo
+    if (result.error && !result.error.message?.includes("not found")) {
+      return result;
+    }
+  }
+  
+  // Después de todos los retries, no se encontró la orden
+  return { order: null };
 }

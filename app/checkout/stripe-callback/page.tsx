@@ -2,8 +2,7 @@
 
 import { useEffect, useState, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import { getCart } from "@/lib/cart-medusa";
-import { completeCheckout } from "@/lib/checkout";
+import { checkCartOrderStatus, completeCheckout } from "@/lib/checkout";
 import { useToast } from "@/contexts/ToastContext";
 import Loader from "@/components/ui/Loader";
 import Link from "next/link";
@@ -14,17 +13,35 @@ function StripeCallbackContent() {
   const { error: showError, success: showSuccess } = useToast();
   const [status, setStatus] = useState<"processing" | "success" | "error">("processing");
   const [orderId, setOrderId] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    // Verificar si el usuario canceló el pago
+    processStripeCallback();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
+
+  const processStripeCallback = async () => {
+    // 1. Verificar si el usuario canceló el pago
     const canceled = searchParams.get("canceled");
     if (canceled === "true") {
       showError("El pago fue cancelado. Puedes intentar nuevamente.");
       setStatus("error");
+      setErrorMessage("El pago fue cancelado por el usuario.");
       return;
     }
 
-    // Intentar obtener cart_id de los query params primero
+    // 2. Verificar si hay un error de Stripe en los query params
+    const error = searchParams.get("error");
+    const errorDescription = searchParams.get("error_description");
+    if (error) {
+      const message = errorDescription || "Error al procesar el pago con Stripe";
+      showError(message);
+      setStatus("error");
+      setErrorMessage(message);
+      return;
+    }
+
+    // 3. Obtener cart_id
     let cartId = searchParams.get("cart_id");
     
     // Si no está en query params, intentar obtenerlo de sessionStorage
@@ -33,65 +50,103 @@ function StripeCallbackContent() {
     }
 
     if (!cartId) {
-      showError("No se pudo identificar el carrito. Por favor, intenta nuevamente.");
+      const message = "No se pudo identificar el carrito. Por favor, intenta nuevamente.";
+      showError(message);
       setStatus("error");
+      setErrorMessage(message);
       return;
     }
 
-    // Completar el checkout después del redirect de Stripe
-    completeCheckoutAfterStripe(cartId);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams]);
+    // 4. Procesar el callback de Stripe
+    await handleStripeCallback(cartId);
+  };
 
-  const completeCheckoutAfterStripe = async (cartId: string) => {
+  const handleStripeCallback = async (cartId: string) => {
     try {
-      // Pequeño delay para asegurar que Stripe procesó el webhook
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      // PRIMERO: Verificar si el webhook de Stripe ya creó la orden
+      // Esto es lo más común: Stripe procesa el pago → webhook → Medusa crea la orden
+      const orderStatusResult = await checkCartOrderStatus(cartId, 5, 2000);
+      
+      if (orderStatusResult.order) {
+        // ¡La orden ya existe! El webhook funcionó correctamente
+        handleOrderSuccess(orderStatusResult.order.id, cartId);
+        return;
+      }
 
-      // Intentar completar el checkout
+      // Si no encontramos la orden después del polling, puede ser que:
+      // 1. El webhook aún no se procesó (raro pero posible)
+      // 2. El pago falló
+      // 3. El cart ya no existe (fue consumido)
+
+      // Intentar completar el checkout como fallback
+      // Esto puede funcionar si Medusa aún no procesó el webhook
       const checkoutResult = await completeCheckout(cartId);
 
-      // Si requiere otro redirect (no debería pasar, pero por si acaso)
+      // Si requiere otro redirect (no debería pasar después de Stripe)
       if (checkoutResult.requiresPayment && checkoutResult.redirectUrl) {
         window.location.href = checkoutResult.redirectUrl;
         return;
       }
 
-      // Si hay error
+      // Si hay una orden en el resultado del checkout
+      if (checkoutResult.order) {
+        handleOrderSuccess(checkoutResult.order.id, cartId);
+        return;
+      }
+
+      // Si hay un error específico
       if (checkoutResult.error) {
-        const errorMessage = checkoutResult.error.message || "Error al procesar el pago";
-        showError(errorMessage);
+        const message = checkoutResult.error.message || "Error al procesar el pago";
+        
+        // Si el error indica que el cart ya fue completado, buscar la orden nuevamente
+        if (message.includes("already") || message.includes("completed")) {
+          const retryResult = await checkCartOrderStatus(cartId, 3, 1000);
+          if (retryResult.order) {
+            handleOrderSuccess(retryResult.order.id, cartId);
+            return;
+          }
+        }
+        
+        showError(message);
         setStatus("error");
+        setErrorMessage(message);
         return;
       }
 
-      // Si no hay orden, es un error
-      if (!checkoutResult.order) {
-        showError("No se pudo crear la orden después del pago. Por favor, contacta con soporte.");
-        setStatus("error");
-        return;
-      }
-
-      // Éxito - limpiar carrito y redirigir
-      if (typeof window !== "undefined") {
-        localStorage.removeItem("medusa_cart_id");
-        sessionStorage.removeItem("stripe_cart_id");
-      }
-
-      window.dispatchEvent(new CustomEvent("cart-updated"));
-      setOrderId(checkoutResult.order.id);
-      setStatus("success");
-      showSuccess("¡Pago completado con éxito!");
-
-      // Redirigir a confirmación después de un breve delay
-      setTimeout(() => {
-        router.push(`/checkout/confirmacion?order_id=${checkoutResult.order!.id}`);
-      }, 1500);
-    } catch (error: any) {
-      console.error("Error completing checkout after Stripe:", error);
-      showError("Error al procesar el pago. Por favor, intenta nuevamente.");
+      // Si llegamos aquí, no hay orden y no hay error claro
+      // Puede ser que el webhook aún esté procesando o el pago falló
+      const message = "No se pudo confirmar la orden. El pago puede estar aún procesándose. Por favor, verifica tu email o contacta con soporte.";
+      showError(message);
       setStatus("error");
+      setErrorMessage(message);
+      
+    } catch (error: any) {
+      console.error("[Stripe Callback] Error:", error);
+      const message = error.message || "Error al procesar el pago. Por favor, intenta nuevamente.";
+      showError(message);
+      setStatus("error");
+      setErrorMessage(message);
     }
+  };
+
+  const handleOrderSuccess = (orderId: string, cartId: string) => {
+    // Limpiar carrito y datos temporales
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("medusa_cart_id");
+      sessionStorage.removeItem("stripe_cart_id");
+    }
+
+    // Disparar evento de actualización del carrito
+    window.dispatchEvent(new CustomEvent("cart-updated"));
+    
+    setOrderId(orderId);
+    setStatus("success");
+    showSuccess("¡Pago completado con éxito!");
+
+    // Redirigir a confirmación después de un breve delay
+    setTimeout(() => {
+      router.push(`/checkout/confirmacion?order_id=${orderId}`);
+    }, 1500);
   };
 
   if (status === "processing") {
@@ -100,7 +155,10 @@ function StripeCallbackContent() {
         <div className="text-center">
           <Loader size="lg" text="Procesando pago..." />
           <p className="mt-4 text-gray-600">
-            Por favor, espera mientras confirmamos tu pago.
+            Por favor, espera mientras confirmamos tu pago con Stripe.
+          </p>
+          <p className="mt-2 text-sm text-gray-500">
+            Esto puede tomar unos segundos mientras verificamos el estado del pago.
           </p>
         </div>
       </div>
@@ -130,7 +188,7 @@ function StripeCallbackContent() {
             Error al procesar el pago
           </h1>
           <p className="text-gray-600 mb-8">
-            Hubo un problema al procesar tu pago. Por favor, intenta nuevamente.
+            {errorMessage || "Hubo un problema al procesar tu pago. Por favor, intenta nuevamente."}
           </p>
           <div className="flex gap-4 justify-center">
             <Link

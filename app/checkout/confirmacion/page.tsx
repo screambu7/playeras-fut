@@ -30,12 +30,28 @@ function ConfirmacionContent() {
     try {
       const result = await getOrder(id);
       if (!result.order) {
-        setError(result.error?.message || "No se pudo cargar la orden");
+        const errorMsg = result.error?.message || "No se pudo cargar la orden";
+        setError(errorMsg);
         return;
       }
+
+      // Validar que la orden tiene datos mínimos requeridos
+      if (!result.order.id || !result.order.items || result.order.items.length === 0) {
+        setError("La orden no tiene datos válidos. Por favor, contacta con soporte.");
+        return;
+      }
+
+      // Validar que la orden tiene un estado de pago válido
+      // Si el pago está pendiente o falló, mostrar advertencia
+      if (result.order.payment_status === "not_paid" || result.order.payment_status === "canceled") {
+        setError("El pago de esta orden no se completó. Por favor, verifica el estado del pago.");
+        return;
+      }
+
       setOrder(result.order);
-    } catch (err) {
-      setError("Error al cargar la orden. Por favor, intenta nuevamente.");
+    } catch (err: any) {
+      const errorMsg = err.message || "Error al cargar la orden. Por favor, intenta nuevamente.";
+      setError(errorMsg);
     } finally {
       setLoading(false);
     }

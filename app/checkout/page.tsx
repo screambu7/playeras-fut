@@ -325,7 +325,8 @@ export default function CheckoutPage() {
       setCart(cartAfterShipping);
 
       // 3. Asegurar que payment sessions están inicializadas
-      if (paymentSessions.length === 0) {
+      let currentPaymentSessions = paymentSessions;
+      if (currentPaymentSessions.length === 0) {
         const initResult = await initPaymentSessions(cartAfterShipping.id);
         if (initResult.error) {
           showError(initResult.error.message || "Error al inicializar métodos de pago");
@@ -347,7 +348,8 @@ export default function CheckoutPage() {
           return;
         }
         
-        setPaymentSessions(sessionsResult.payment_sessions);
+        currentPaymentSessions = sessionsResult.payment_sessions;
+        setPaymentSessions(currentPaymentSessions);
         
         // Si no hay provider seleccionado, seleccionar el primero
         if (!selectedPaymentProvider && sessionsResult.payment_sessions.length > 0) {
@@ -366,13 +368,32 @@ export default function CheckoutPage() {
       }
 
       // Validar que el provider seleccionado existe en las payment sessions
-      const providerExists = paymentSessions.some(
+      const providerExists = currentPaymentSessions.some(
         (ps) => ps.provider_id === selectedProvider
       );
       if (!providerExists) {
         showError("El método de pago seleccionado no está disponible");
         setIsSubmitting(false);
         return;
+      }
+
+      // Validar que la payment session tiene estado válido
+      const selectedSession = currentPaymentSessions.find(
+        (ps) => ps.provider_id === selectedProvider
+      );
+      if (!selectedSession) {
+        showError("No se pudo encontrar la sesión de pago seleccionada");
+        setIsSubmitting(false);
+        return;
+      }
+
+      // Para Stripe, validar que la sesión está lista
+      if (selectedProvider.toLowerCase().includes("stripe")) {
+        if (selectedSession.status !== "authorized" && selectedSession.status !== "pending") {
+          showError("La sesión de pago de Stripe no está lista. Por favor, intenta nuevamente.");
+          setIsSubmitting(false);
+          return;
+        }
       }
 
       const paymentResult = await setPaymentSession(cartAfterShipping.id, selectedProvider);
@@ -396,9 +417,15 @@ export default function CheckoutPage() {
       
       // Si requiere redirect (Stripe)
       if (checkoutResult.requiresPayment && checkoutResult.redirectUrl) {
-        // Guardar cart_id en sessionStorage para el callback
+        // Guardar cart_id en sessionStorage y URL de retorno para el callback
         if (typeof window !== "undefined") {
           sessionStorage.setItem("stripe_cart_id", cartAfterPayment.id);
+          // Guardar también la URL de retorno esperada para validación
+          const returnUrl = new URL(checkoutResult.redirectUrl);
+          const returnUrlParams = new URLSearchParams(returnUrl.search);
+          const returnUrlParam = returnUrlParams.get("return_url") || 
+            `${window.location.origin}/checkout/stripe-callback?cart_id=${cartAfterPayment.id}`;
+          sessionStorage.setItem("stripe_return_url", returnUrlParam);
         }
         
         // Redirigir a Stripe

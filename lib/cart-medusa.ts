@@ -5,8 +5,38 @@
 import { medusa } from "./medusa";
 import { MedusaCart, MedusaCartItem } from "@/types/medusa";
 import { createApiError, ApiError } from "./error-handler";
+import { listRegions } from "./medusa-store";
 
 let cartId: string | null = null;
+let defaultRegionId: string | null = null;
+
+/**
+ * Obtener la región por defecto (EUR o primera disponible)
+ */
+async function getDefaultRegionId(): Promise<string | null> {
+  if (defaultRegionId) {
+    return defaultRegionId;
+  }
+
+  try {
+    const regions = await listRegions();
+    
+    if (regions.length === 0) {
+      console.error("[Cart] No hay regiones disponibles en Medusa");
+      return null;
+    }
+
+    // Buscar región EUR (Europa) o usar la primera disponible
+    const eurRegion = regions.find(r => r.currency_code.toLowerCase() === "eur");
+    const regionId = eurRegion?.id || regions[0].id;
+    
+    defaultRegionId = regionId;
+    return regionId;
+  } catch (error) {
+    console.error("[Cart] Error obteniendo regiones:", error);
+    return null;
+  }
+}
 
 /**
  * Obtener o crear un carrito
@@ -22,6 +52,18 @@ export async function getOrCreateCart(): Promise<{ cart: MedusaCart | null; erro
     if (cartId) {
       try {
         const { cart } = await medusa.carts.retrieve(cartId);
+        
+        // Si el carrito no tiene región, asignarle una
+        if (cart && !cart.region_id) {
+          const regionId = await getDefaultRegionId();
+          if (regionId) {
+            await medusa.carts.update(cart.id, { region_id: regionId });
+            // Recuperar el carrito actualizado
+            const { cart: updatedCart } = await medusa.carts.retrieve(cart.id);
+            return { cart: updatedCart as unknown as MedusaCart };
+          }
+        }
+        
         return { cart: cart as unknown as MedusaCart };
       } catch (error) {
         // Si el carrito no existe, limpiar y crear uno nuevo
@@ -32,8 +74,23 @@ export async function getOrCreateCart(): Promise<{ cart: MedusaCart | null; erro
       }
     }
     
-    // Crear un nuevo carrito
-    const { cart } = await medusa.carts.create({});
+    // Obtener región por defecto antes de crear el carrito
+    const regionId = await getDefaultRegionId();
+    if (!regionId) {
+      return { 
+        cart: null, 
+        error: { 
+          message: "No se pudo obtener una región para el carrito. Verifica que el backend de Medusa esté configurado correctamente.", 
+          isNetworkError: false, 
+          isTimeout: false 
+        } 
+      };
+    }
+    
+    // Crear un nuevo carrito con región
+    const { cart } = await medusa.carts.create({
+      region_id: regionId,
+    });
     cartId = cart.id;
     
     // Guardar cartId en localStorage
